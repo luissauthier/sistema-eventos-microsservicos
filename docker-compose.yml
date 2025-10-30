@@ -1,0 +1,31 @@
+﻿version: "3.9"
+services:
+  gateway:
+    image: nginx:alpine
+    ports: ["80:80"]
+    volumes:
+      - ./reverse-proxy/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./services/api/static:/var/www/static:ro
+      - ./services/api/media:/var/www/media:ro
+    depends_on: [api]
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: eventos
+      POSTGRES_USER: eventos
+      POSTGRES_PASSWORD: eventos
+    volumes: [dbdata:/var/lib/postgresql/data]
+  redis:
+    image: redis:7
+  api:
+    build: ./services/api
+    env_file: .env
+    volumes:
+      - ./services/api:/app
+    depends_on: [db, redis]
+  mailer:
+    build: ./services/mailer
+    env_file: .env
+    depends_on: [redis]
+volumes:
+  dbdata:
