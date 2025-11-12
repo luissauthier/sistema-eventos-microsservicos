@@ -1,19 +1,13 @@
-# Usa uma imagem Node.js leve
-FROM node:20-alpine
-
+FROM node:18-alpine
 WORKDIR /app
 
-# Copia os arquivos de dependência
-COPY package.json package-lock.json* ./
+# Instala o nodemon para hot-reload
+RUN npm install -g nodemon
 
-# Instala as dependências
+COPY package*.json ./
 RUN npm install
 
-# Copia o código-fonte
-COPY ./src /app
+COPY . .
 
-# Expõe a porta interna
 EXPOSE 8004
-
-# Comando para rodar a aplicação
-CMD ["npm", "start"]
+CMD ["nodemon", "index.js"]
