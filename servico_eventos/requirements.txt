@@ -1,3 +1,8 @@
+# servico_eventos/requirements.txt
 fastapi
 uvicorn[standard]
+sqlalchemy
 psycopg2-binary
+python-jose[cryptography]
+pydantic[email]
+httpx
