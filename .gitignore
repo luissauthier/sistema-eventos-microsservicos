@@ -1,17 +1,24 @@
-# Arquivos de ambiente
+# Arquivos de Segredo e Ambiente
 .env
 .env.*
-!.env.example
 
-# Dependências
-venv/
-.venv/
+# Dependências (devem ser instaladas em cada máquina/container)
 node_modules/
 
-# Python
+# Pastas de build
+build/
+dist/
+
+# Arquivos do Jeferson (Python)
 __pycache__/
 *.pyc
-.pytest_cache/
+.venv/
+venv/
 
-# Docker
-docker-compose.override.yml
+# Arquivos de Log
+*.log
+npm-debug.log*
+
+# Arquivos do SO
+.DS_Store
+Thumbs.db
