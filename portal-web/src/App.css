@@ -1,38 +1,262 @@
-.App {
-  text-align: center;
+body {
+  font-family: Arial, sans-serif;
+  background-color: #f4f4f4;
+  margin: 0;
+  padding: 0;
 }
 
-.App-logo {
-  height: 40vmin;
-  pointer-events: none;
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .App-logo {
-    animation: App-logo-spin infinite 20s linear;
-  }
-}
-
+/* --- HEADER --- */
 .App-header {
   background-color: #282c34;
-  min-height: 100vh;
+  padding: 20px;
+  color: white;
+  text-align: center;
+  display: flex;
+  justify-content: space-between; /* Alinha o h1 e o botão */
+  align-items: center;
+}
+
+.App-header h1 {
+  margin: 0;
+  font-size: 24px;
+  flex-grow: 1; /* Faz o título ocupar o espaço */
+  text-align: center; /* Centraliza o título */
+  padding-left: 100px; /* Compensa o botão de logout */
+}
+
+.btn-logout {
+  background-color: #f44336;
+  color: white;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 14px;
+}
+.btn-logout:hover {
+  background-color: #d32f2f;
+}
+
+/* --- CONTEÚDO GERAL --- */
+.conteudo {
+  max-width: 900px;
+  margin: 20px auto;
+  padding: 20px;
+}
+
+/* --- FORMULÁRIOS (Login/Cadastro) --- */
+.form-container {
+  max-width: 400px;
+  margin: 40px auto;
+  padding: 30px;
+  background-color: #fff;
+  border-radius: 8px;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.form-container h2 {
+  text-align: center;
+  margin-top: 0;
+  margin-bottom: 20px;
+}
+
+.form-group {
+  margin-bottom: 15px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 5px;
+  font-weight: bold;
+}
+
+.form-group input {
+  width: 100%;
+  padding: 10px;
+  box-sizing: border-box; /* Garante que o padding não estoure a largura */
+  border: 1px solid #ddd;
+  border-radius: 5px;
+}
+
+.btn-primary {
+  width: 100%;
+  padding: 12px;
+  background-color: #007BFF;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 16px;
+}
+.btn-primary:hover {
+  background-color: #0056b3;
+}
+
+.form-switch {
+  text-align: center;
+  margin-top: 15px;
+  font-size: 14px;
+}
+
+.btn-link {
+  background: none;
+  border: none;
+  color: #007BFF;
+  cursor: pointer;
+  padding: 0;
+  margin-left: 5px;
+  font-size: 14px;
+}
+.btn-link:hover {
+  text-decoration: underline;
+}
+
+/* --- EVENTOS (Lista e Detalhes) --- */
+.lista-eventos {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  font-size: calc(10px + 2vmin);
+  gap: 15px;
+}
+
+.card-evento {
+  background-color: #fff;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.card-evento button {
+  background-color: #007BFF;
+  color: white;
+  border: none;
+  padding: 10px 15px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.evento-detalhe {
+  background-color: #fff;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 25px;
+}
+
+.btn-voltar {
+  background-color: transparent;
+  border: 1px solid #aaa;
+  color: #555;
+  padding: 8px 12px;
+  border-radius: 5px;
+  cursor: pointer;
+  margin-bottom: 20px;
+}
+
+.btn-inscrever {
+  background-color: #28a745;
+  color: white;
+  border: none;
+  padding: 12px 20px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 16px;
+  margin-top: 10px;
+}
+
+/* ... (todos os seus estilos anteriores) ... */
+
+.btn-inscrever {
+  background-color: #28a745;
+  color: white;
+  border: none;
+  padding: 12px 20px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 16px;
+  margin-top: 10px;
+}
+
+.btn-cancelar {
+  background-color: #dc3545; /* Cor vermelha para "Cancelar" */
+  color: white;
+  border: none;
+  padding: 12px 20px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 16px;
+  margin-top: 10px;
+}
+.btn-cancelar:hover {
+  background-color: #c82333;
+}
+
+/* Estilos do Header (para acomodar a navegação) */
+.App-header {
+  justify-content: space-between; /* Garante que tudo se alinhe */
+}
+.App-header h1 {
+  flex-grow: 0; /* Remove o flex-grow */
+  padding-left: 0; /* Remove o padding extra */
+}
+
+/* Navegação Principal */
+.main-nav {
+  display: flex;
+  gap: 10px;
+}
+.main-nav button {
+  background: none;
+  border: none;
+  color: #aaa;
+  font-size: 16px;
+  cursor: pointer;
+  padding: 10px;
+  border-bottom: 2px solid transparent;
+}
+.main-nav button:hover {
   color: white;
 }
-
-.App-link {
-  color: #61dafb;
+.main-nav button.active {
+  color: white;
+  border-bottom-color: #007BFF;
 }
 
-@keyframes App-logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+.lista-inscricoes {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.card-inscricao {
+  background-color: #fff;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.status-checkin {
+  font-weight: bold;
+}
+.checkin-ok {
+  color: #28a745; /* Verde */
+}
+.checkin-pendente {
+  color: #ffc107; /* Amarelo */
+}
+
+.btn-cancelar-small {
+  background-color: #dc3545;
+  color: white;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 14px;
+}
+.btn-cancelar-small:hover {
+  background-color: #c82333;
 }
