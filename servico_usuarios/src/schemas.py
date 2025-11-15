@@ -18,12 +18,23 @@ class UserCreate(UserBase):
     password: str = Field(..., min_length=8, max_length=72)
     email: Optional[EmailStr] = None
     full_name: Optional[str] = Field(default=None, min_length=2, max_length=100)
+    is_admin: Optional[bool]
+    is_active: Optional[bool] = True
+    is_superuser: Optional[bool] = False
+    is_verified: Optional[bool] = False
 
 # Modelo para ler dados do usuário (o que a API retorna)
 class User(UserBase):
     id: int
     email: Optional[EmailStr] = None
     full_name: Optional[str] = None
+    is_admin: bool
+    is_active: bool = True
+    is_superuser: bool = False
+    is_verified: bool = False
 
     class Config:
         from_attributes = True
+class UserUpdate(BaseModel):
+    email: Optional[EmailStr] = None
+    full_name: Optional[str] = None
