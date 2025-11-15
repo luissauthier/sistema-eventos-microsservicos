@@ -18,7 +18,7 @@ class UserCreate(UserBase):
     password: str = Field(..., min_length=8, max_length=72)
     email: Optional[EmailStr] = None
     full_name: Optional[str] = Field(default=None, min_length=2, max_length=100)
-    is_admin: Optional[bool]
+    is_admin: Optional[bool] = False
     is_active: Optional[bool] = True
     is_superuser: Optional[bool] = False
     is_verified: Optional[bool] = False

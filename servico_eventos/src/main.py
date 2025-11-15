@@ -5,6 +5,7 @@ from typing import List
 from fastapi import FastAPI, Depends, HTTPException, status, Query, BackgroundTasks
 import httpx # Para fazer chamadas HTTP
 import asyncio # Para rodar o "fire-and-forget"
+from sqlalchemy.orm import joinedload
 
 # Importa nossos módulos locais
 import models
@@ -308,3 +309,39 @@ def register_presenca(
     # (chamar o servico_notificacoes)
 
     return db_presenca
+
+@app.get("/inscricoes/me", response_model=List[schemas.InscricaoComDetalhes])
+def read_minhas_inscricoes(
+    db: Session = Depends(get_db),
+    current_user: security.User = Depends(security.get_current_user)
+):
+    """
+    Consulta todas as inscrições do usuário logado.
+    """
+    
+    # Esta é a consulta profissional:
+    # 1. Filtra por 'usuario_id' (do token)
+    # 2. Usa 'options(joinedload(models.Inscricao.evento))' 
+    #    para fazer o JOIN e carregar os dados do evento
+    #    junto com a inscrição (evita N+1 queries).
+    inscricoes = db.query(models.Inscricao).options(
+        joinedload(models.Inscricao.evento)
+    ).filter(
+        models.Inscricao.usuario_id == current_user.id
+    ).all()
+    
+    return inscricoes
+
+@app.get("/presencas/me", response_model=List[schemas.Presenca])
+def read_minhas_presencas(
+    db: Session = Depends(get_db),
+    current_user: security.User = Depends(security.get_current_user)
+):
+    """
+    Consulta todos os registos de presença do usuário logado.
+    """
+    presencas = db.query(models.Presenca).filter(
+        models.Presenca.usuario_id == current_user.id
+    ).all()
+    
+    return presencas

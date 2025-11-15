@@ -45,3 +45,6 @@ class Presenca(BaseModel):
     data_checkin: datetime
     class Config:
         from_attributes = True
+
+class InscricaoComDetalhes(Inscricao):
+    evento: Evento 
