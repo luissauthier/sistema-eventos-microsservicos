@@ -81,6 +81,7 @@
     env_file: ./.env
     volumes:
       - ./servico_notificacoes/src:/app # Hot-reload para Node
+      - /app/node_modules
     expose:
       - "8004" # Porta interna do Node
   

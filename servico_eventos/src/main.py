@@ -2,7 +2,9 @@
 from fastapi import FastAPI, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List
-from fastapi import FastAPI, Depends, HTTPException, status, Query
+from fastapi import FastAPI, Depends, HTTPException, status, Query, BackgroundTasks
+import httpx # Para fazer chamadas HTTP
+import asyncio # Para rodar o "fire-and-forget"
 
 # Importa nossos módulos locais
 import models
@@ -12,6 +14,20 @@ from database import engine, get_db
 
 # Cria as tabelas no DB (eventos, inscricoes, presencas)
 models.Base.metadata.create_all(bind=engine)
+
+NOTIFICATION_SERVICE_URL = "http://servico_notificacoes:8004/emails"
+
+async def send_notification(payload: dict):
+    """
+    Função "dispare e esqueça" para enviar e-mails.
+    """
+    try:
+        async with httpx.AsyncClient() as client:
+            await client.post(NOTIFICATION_SERVICE_URL, json=payload)
+        # Se falhar, nós (propositalmente) não fazemos nada.
+        # Em um sistema de produção, logaríamos o erro aqui.
+    except httpx.RequestError as e:
+        print(f"ALERTA: Falha ao conectar com o serviço de notificação: {e}")
 
 app = FastAPI(
     title="Serviço de Eventos e Inscrições",
@@ -66,8 +82,9 @@ def create_evento(
 @app.post("/inscricoes", response_model=schemas.Inscricao, status_code=status.HTTP_201_CREATED)
 def create_inscricao(
     inscricao: schemas.InscricaoCreate, 
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    current_user: security.User = Depends(security.get_current_user)
+    current_user: security.User = Depends(security.get_current_user),
 ):
     """
     Registra uma inscrição.
@@ -89,6 +106,13 @@ def create_inscricao(
     db.add(db_inscricao)
     db.commit()
     db.refresh(db_inscricao)
+    payload = {
+        "tipo": "inscricao",
+        "destinatario": current_user.email,
+        "nome": current_user.full_name or current_user.username,
+        "nome_evento": "Nome do Evento" # TODO: Buscar o nome do evento
+    }
+    background_tasks.add_task(send_notification, payload)
     return db_inscricao
 
 # --- Endpoint de Presença (Protegido - Nível Atendente) ---
@@ -99,7 +123,7 @@ def register_presenca(
     db: Session = Depends(get_db),
     # Risco de Segurança: Esta rota deveria ter um nível de permissão
     # maior (ex: "atendente"), mas por enquanto, qualquer usuário logado pode usar.
-    current_username: str = Depends(security.get_current_user)
+    current_user: security.User = Depends(security.get_current_user)
 ):
     """
     [cite_start]Registra uma presença (check-in). [cite: 48]
@@ -123,11 +147,28 @@ def register_presenca(
     db.add(db_presenca)
     db.commit()
     db.refresh(db_presenca)
+
+    # Precisamos dos dados do usuário que fez o check-in, não do atendente (current_user)
+    # TODO: Buscar o e-mail/nome do 'db_inscricao.usuario_id'
+    
+    payload = {
+        "tipo": "checkin",
+        "destinatario": "email_do_participante@teste.com", # TODO: Buscar e-mail
+        "nome": "Nome do Participante", # TODO: Buscar nome
+        "nome_evento": "Nome do Evento" # TODO: Buscar nome
+    }
+    # Por enquanto, vamos notificar o atendente (current_user) como placeholder
+    payload["destinatario"] = current_user.email
+    payload["nome"] = current_user.full_name or current_user.username
+    
+    asyncio.create_task(send_notification(payload))
+
     return db_presenca
 
 @app.delete("/inscricoes", status_code=status.HTTP_200_OK)
 def delete_inscricao(
     # O ID é passado como um parâmetro de consulta, ex: /inscricoes?id=1
+    background_tasks: BackgroundTasks,
     inscricao_id: int = Query(..., alias="id"), 
     db: Session = Depends(get_db),
     current_user: security.User = Depends(security.get_current_user)
@@ -170,8 +211,13 @@ def delete_inscricao(
     db.delete(db_inscricao)
     db.commit()
     
-    # TODO: Disparar e-mail de cancelamento (Sprint 3) [cite: 19]
-    # (chamar o servico_notificacoes)
+    payload = {
+        "tipo": "cancelamento",
+        "destinatario": current_user.email,
+        "nome": current_user.full_name or current_user.username,
+        "nome_evento": "Nome do Evento" # TODO: Buscar o nome do evento
+    }
+    background_tasks.add_task(send_notification, payload)
 
     return {"message": "Inscrição cancelada com sucesso"}
 
@@ -209,6 +255,7 @@ def read_inscricao(
 @app.post("/presencas", response_model=schemas.Presenca, status_code=status.HTTP_201_CREATED)
 def register_presenca(
     presenca: schemas.PresencaCreate,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     # TODO: Proteger esta rota para ser acessível apenas por "atendentes".
     # Por enquanto, qualquer usuário logado pode registrar uma presença.
@@ -248,6 +295,14 @@ def register_presenca(
     db.add(db_presenca)
     db.commit()
     db.refresh(db_presenca)
+
+    payload = {
+        "tipo": "checkin",
+        "destinatario": current_user.email,
+        # ...
+    }
+    # Substitua 'asyncio.create_task' por isto:
+    background_tasks.add_task(send_notification, payload)
     
     # TODO: Disparar e-mail de "comparecimento (checkin)" (Sprint 3)
     # (chamar o servico_notificacoes)
