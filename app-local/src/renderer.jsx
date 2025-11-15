@@ -1,193 +1,299 @@
-// Arquivo: src/renderer.jsx
 import React, { useState } from 'react';
 import { createRoot } from 'react-dom/client';
+// Importa o CSS do portal-web (que copiámos para cá)
+import './App.css'; 
 import './index.css';
+import { motion, AnimatePresence } from 'framer-motion';
+import { LogIn, LogOut, Download, Upload, WifiOff, Wifi, UserPlus, Check } from 'lucide-react';
+
+// Animações
+const buttonHoverTap = {
+  whileHover: { scale: 1.03 },
+  whileTap: { scale: 0.98 }
+};
+const pageVariants = {
+  initial: { opacity: 0, y: 10 },
+  in: { opacity: 1, y: 0 },
+  out: { opacity: 0, y: -10 }
+};
+
+// Enumeração de estados da aplicação
+const AppState = {
+  LOGGED_OUT: 'LOGGED_OUT',
+  ONLINE: 'ONLINE',
+  OFFLINE: 'OFFLINE'
+};
 
 function App() {
-  // States do Cadastro
-  const [nome, setNome] = useState('');
-  const [email, setEmail] = useState('');
-  const [senha, setSenha] = useState('');
-  const [mensagem, setMensagem] = useState('');
+  const [appState, setAppState] = useState(AppState.LOGGED_OUT);
+  const [message, setMessage] = useState('Por favor, faça login como atendente/admin.');
+  const [loading, setLoading] = useState(false);
+  const [atendente, setAtendente] = useState(null);
+  
+  // --- Estados do Login ---
+  const [username, setUsername] = useState('admin_jeferson');
+  const [password, setPassword] = useState('senha123');
 
-  // States da Sincronização
-  const [syncMensagem, setSyncMensagem] = useState('');
+  // --- Estados do Modo Offline ---
+  const [offlineForm, setOfflineForm] = useState({ nome: '', email: '', senha: '' });
+  const [lastLocalUser, setLastLocalUser] = useState(null); // Guarda { nome, id_local }
+  
+  const [localData, setLocalData] = useState({ eventos: [], inscricoes: [], presencas: [] });
 
-  // States dos Eventos e Inscrições
-  const [eventos, setEventos] = useState([]); 
-  const [eventoMensagem, setEventoMensagem] = useState('');
+  // --- Handlers de API (Online) ---
 
-  // AJUSTE: 'inscricoes' agora guarda objetos { eventoId, inscricaoId }
-  const [inscricoes, setInscricoes] = useState([]); 
-
-  // NOVO: State para Presenças (guarda o inscricaoId)
-  const [checkins, setCheckins] = useState([]);
-
-  // Handler do Cadastro (sem alteração)
-  const handleSubmit = async (e) => {
-    e.preventDefault(); 
-    setMensagem('Cadastrando...');
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setMessage('Autenticando na API...');
     try {
-      const resultado = await window.api.cadastrarUsuario({ nome, email, senha });
-      if (resultado.success) {
-        setMensagem(`Usuário cadastrado com ID local: ${resultado.id}!`);
-        setNome(''); setEmail(''); setSenha('');
-      } else { setMensagem(`Erro do banco: ${resultado.message}`); }
-    } catch (error) { setMensagem(`Erro de comunicação: ${error.message}`); }
+      const result = await window.api.loginApi(username, password);
+      if (result.success) {
+        setAppState(AppState.ONLINE);
+        setAtendente(result.user);
+        setMessage(`Bem-vindo, ${result.user.full_name}. Pronto para sincronizar.`);
+      } else {
+        setMessage(`Erro: ${result.message}`);
+      }
+    } catch (error) { setMessage(`Erro de comunicação: ${error.message}`); }
+    setLoading(false);
   };
 
-  // Handler da Sincronização (sem alteração)
-  const handleSync = async () => {
-    setSyncMensagem('Sincronizando...');
+  const handleSyncDownload = async () => {
+    setLoading(true);
+    setMessage('Sincronizando (Download) eventos, utilizadores e inscrições...');
     try {
-      const resultado = await window.api.sincronizarEventosMock();
-      setSyncMensagem(resultado.message);
-    } catch (error) { setSyncMensagem(`Erro de comunicação: ${error.message}`); }
+      const result = await window.api.sincronizarDownload();
+      setMessage(result.message);
+    } catch (error) { setMessage(`Erro de comunicação: ${error.message}`); }
+    setLoading(false);
   };
 
-  // Handler de Buscar Eventos (sem alteração)
-  const handleBuscarEventos = async () => {
-    setEventoMensagem('Buscando eventos no SQLite...');
+  const handleSyncUpload = async () => {
+    setLoading(true);
+    setMessage('Sincronizando (Upload) dados locais para o portal...');
     try {
-      const resultado = await window.api.buscarEventosLocais();
-      if (resultado.success) {
-        setEventos(resultado.data);
-        setEventoMensagem(`${resultado.data.length} eventos carregados do banco.`);
-      } else { setEventoMensagem(`Erro: ${resultado.message}`); }
-    } catch (error) { setEventoMensagem(`Erro de comunicação: ${error.message}`); }
+      const result = await window.api.sincronizarUpload();
+      setMessage(result.message);
+      // Limpa os dados locais após o sync
+      setLastLocalUser(null);
+    } catch (error) { setMessage(`Erro de comunicação: ${error.message}`); }
+    setLoading(false);
   };
 
-  // Handler de Inscrição (AJUSTADO)
-  const handleInscricaoLocal = async (eventoId) => {
-    setEventoMensagem(`Inscrevendo no evento ${eventoId}...`);
-    const usuarioIdLocal = 1; // MOCK: Assumindo usuário 1
-
-    try {
-      const resultado = await window.api.inscreverLocal({ 
-        usuario_id: usuarioIdLocal, 
-        evento_id: eventoId 
-      });
-
-      if (resultado.success) {
-        setEventoMensagem(`Inscrição local salva! (ID: ${resultado.id})`);
-        // AJUSTE: Salva o objeto completo
-        setInscricoes([...inscricoes, { 
-          eventoId: eventoId, 
-          inscricaoId: resultado.id 
-        }]);
-      } else { setEventoMensagem(`Erro ao inscrever: ${resultado.message}`); }
-    } catch (error) { setEventoMensagem(`Erro de comunicação: ${error.message}`); }
+  const handleLogout = () => {
+    setAtendente(null);
+    setAppState(AppState.LOGGED_OUT);
+    setMessage('Por favor, faça login como atendente/admin.');
   };
 
-  // NOVO: Handler para registrar presença
-  const handlePresencaLocal = async (eventoId) => {
-    // 1. Encontrar o ID da inscrição para este evento
-    const inscricao = inscricoes.find(i => i.eventoId === eventoId);
-    if (!inscricao) {
-      setEventoMensagem("Erro: Inscrição não encontrada no estado.");
+  // --- Handlers de Ações Offline (Itens 14, 15, 16) ---
+
+  const handleGoOffline = async () => {
+    setLoading(true);
+    setMessage('A carregar dados do DB local...');
+    try {
+      const result = await window.api.buscarDadosLocais();
+      if (result.success) {
+        setLocalData(result.data);
+        setAppState(AppState.OFFLINE);
+        setMessage(`Modo Offline ativado. ${result.data.eventos.length} eventos carregados.`);
+      } else { setMessage(`Erro: ${result.message}`); }
+    } catch (error) { setMessage(`Erro de comunicação: ${error.message}`); }
+    setLoading(false);
+  };
+
+  const handleRegisterOffline = async (e) => {
+    e.preventDefault();
+    setMessage('A registar utilizador localmente...');
+    try {
+      const result = await window.api.cadastrarUsuarioLocal(offlineForm);
+      if (result.success) {
+        setMessage(`Participante 3 (ID Local: ${result.id}) registado! Pode inscrevê-lo.`);
+        setLastLocalUser({ nome: offlineForm.nome, id_local: result.id });
+        setOfflineForm({ nome: '', email: '', senha: '' });
+      } else { setMessage(`Erro DB: ${result.message}`); }
+    } catch (error) { setMessage(`Erro de comunicação: ${error.message}`); }
+  };
+
+  const handleSubscribeOffline = async (eventoIdServer) => {
+    if (!lastLocalUser) {
+      setMessage("Erro: Registe primeiro o 'Participante 3' (Item 14)!");
       return;
     }
-
-    const inscricaoId = inscricao.inscricaoId;
-    setEventoMensagem(`Registrando presença para inscrição ${inscricaoId}...`);
-
+    setMessage(`A inscrever ${lastLocalUser.nome} no evento...`);
     try {
-      const resultado = await window.api.registrarPresencaLocal(inscricaoId);
-      if (resultado.success) {
-        setEventoMensagem(`Presença registrada com sucesso!`);
-        // Adiciona o ID da inscrição ao state de checkins
-        setCheckins([...checkins, inscricaoId]);
-      } else {
-        setEventoMensagem(`Erro ao registrar presença: ${resultado.message}`);
-      }
-    } catch (error) {
-      setEventoMensagem(`Erro de comunicação: ${error.message}`);
-    }
+      const result = await window.api.inscreverLocal({
+        usuario_id_local: lastLocalUser.id_local,
+        evento_id_server: eventoIdServer
+      });
+      if (result.success) {
+        setMessage(`Inscrição local (ID: ${result.id}) criada! Pode fazer o check-in.`);
+        // Atualiza a UI
+        const updatedInscricoes = [...localData.inscricoes, {
+          id_local: result.id,
+          evento_id_server: eventoIdServer,
+          nome_usuario: lastLocalUser.nome,
+          nome_evento: localData.eventos.find(e => e.id_server === eventoIdServer).nome
+        }];
+        setLocalData({...localData, inscricoes: updatedInscricoes});
+      } else { setMessage(`Erro DB: ${result.message}`); }
+    } catch (error) { setMessage(`Erro de comunicação: ${error.message}`); }
+  };
+  
+  const handleCheckinOffline = async (inscricaoLocalId) => {
+    setMessage(`A registar presença para inscrição local ${inscricaoLocalId}...`);
+    try {
+      const result = await window.api.registrarPresencaLocal(inscricaoLocalId);
+      if (result.success) {
+        setMessage(`Check-in local (ID: ${result.id}) registado!`);
+        // Atualiza a UI
+        const updatedPresencas = [...localData.presencas, { id_local: result.id, inscricao_id_local: inscricaoLocalId }];
+        setLocalData({...localData, presencas: updatedPresencas });
+      } else { setMessage(`Erro DB: ${result.message}`); }
+    } catch (error) { setMessage(`Erro de comunicação: ${error.message}`); }
   };
 
-  // --- Funções Helper (AJUSTADAS) ---
-
-  // Retorna o *objeto* de inscrição, se houver
-  const getInscricao = (eventoId) => {
-    return inscricoes.find(i => i.eventoId === eventoId);
+  // --- Funções Helper (Estado da UI) ---
+  const getInscricaoLocal = (eventoIdServer) => {
+    return localData.inscricoes.find(i => i.evento_id_server === eventoIdServer);
   };
-
-  // Verifica se o check-in foi feito (pelo inscricaoId)
-  const hasCheckin = (inscricao) => {
+  const hasCheckinLocal = (inscricao) => {
     if (!inscricao) return false;
-    return checkins.includes(inscricao.inscricaoId);
+    return localData.presencas.some(p => p.inscricao_id_local === inscricao.id_local);
   };
 
-  return (
-    <div style={{ padding: '20px', fontFamily: 'Arial, sans-serif' }}>
-      {/* --- SEÇÃO DE CADASTRO (Item 14) --- */}
-      <h1>App Local - Cadastro Offline (Item 14)</h1>
-      {/* ... (formulário de cadastro, sem alteração) ... */}
-      <form onSubmit={handleSubmit}>
-        <div><label>Nome: </label><input type="text" value={nome} onChange={(e) => setNome(e.target.value)} required /></div>
-        <div><label>Email: </label><input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required /></div>
-        <div><label>Senha: </label><input type="password" value={senha} onChange={(e) => setSenha(e.target.value)} required /></div>
-        <button type="submit">Cadastrar Localmente</button>
+  // --- RENDERIZAÇÃO ---
+
+  const renderLoggedOut = () => (
+    <div className="form-container">
+      <h2>App Local (Atendente)</h2>
+      <form onSubmit={handleLogin}>
+        <div className="form-group">
+          <label>Username (Admin):</label>
+          <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} />
+        </div>
+        <div className="form-group">
+          <label>Password:</label>
+          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
+        </div>
+        <motion.button type="submit" className="btn-primary" {...buttonHoverTap} disabled={loading}>
+          <LogIn size={16} /> {loading ? "A autenticar..." : "Login"}
+        </motion.button>
       </form>
-      {mensagem && <p style={{ color: 'blue' }}>{mensagem}</p>}
+    </div>
+  );
 
-      {/* --- SEÇÃO DE SINCRONIZAÇÃO (Item 12) --- */}
-      <hr style={{ margin: '25px 0' }} />
-      <h2>1. Sincronizar Eventos (Mock)</h2>
-      <button onClick={handleSync}>Sincronizar Eventos</button>
-      {syncMensagem && <p style={{ color: 'green' }}>{syncMensagem}</p>}
+  const renderOnline = () => (
+    <div className="form-container">
+      <h2>Modo Online</h2>
+      <p>Bem-vindo, {atendente?.full_name}.</p>
+      <div className="botoes-sync">
+        <motion.button onClick={handleSyncDownload} className="btn-primary" {...buttonHoverTap} disabled={loading}>
+          <Download size={16} /> 1. Sincronizar (Download)
+        </motion.button>
+        <motion.button onClick={handleGoOffline} className="btn-offline" {...buttonHoverTap} disabled={loading}>
+          <WifiOff size={16} /> 2. Ficar Offline (Item 13)
+        </motion.button>
+        <motion.button onClick={handleSyncUpload} className="btn-certificado" {...buttonHoverTap} disabled={loading}>
+          <Upload size={16} /> 3. Sincronizar (Upload - Item 19)
+        </motion.button>
+        <motion.button onClick={handleLogout} className="btn-logout" {...buttonHoverTap} disabled={loading}>
+          <LogOut size={16} /> Logout
+        </motion.button>
+      </div>
+    </div>
+  );
 
-      {/* --- SEÇÃO DE INSCRIÇÃO E PRESENÇA (Item 15 & 16) --- */}
-      <hr style={{ margin: '25px 0' }} />
-      <h2>2. Inscrever e Registrar Presença (Itens 15 & 16)</h2>
-      <button onClick={handleBuscarEventos}>Buscar Eventos do Banco Local</button>
-      {eventoMensagem && <p style={{ color: 'blue' }}>{eventoMensagem}</p>}
-
-      <div style={{ marginTop: '15px' }}>
-        {eventos.map(evento => {
-          // Lógica de estado para este card
-          const inscricao = getInscricao(evento.id);
-          const estaInscrito = !!inscricao;
+  const renderOffline = () => (
+    <div className="offline-container">
+      <motion.button onClick={() => setAppState(AppState.ONLINE)} className="btn-online" {...buttonHoverTap} disabled={loading}>
+        <Wifi size={16} /> Voltar (Ficar Online - Item 18)
+      </motion.button>
+      
+      {/* Item 14: Cadastrar Participante 3 */}
+      <form onSubmit={handleRegisterOffline} className="form-container" style={{maxWidth: '500px'}}>
+        <h3>Item 14: Registar Participante 3 (Offline)</h3>
+        {lastLocalUser && <p className="form-success">Participante "{lastLocalUser.nome}" pronto a inscrever.</p>}
+        <div className="form-group">
+          <label>Nome:</label>
+          <input type="text" value={offlineForm.nome} onChange={(e) => setOfflineForm({...offlineForm, nome: e.target.value})} required />
+        </div>
+        <div className="form-group">
+          <label>Email (username):</label>
+          <input type="email" value={offlineForm.email} onChange={(e) => setOfflineForm({...offlineForm, email: e.target.value})} required />
+        </div>
+        <div className="form-group">
+          <label>Senha:</label>
+          <input type="password" value={offlineForm.senha} onChange={(e) => setOfflineForm({...offlineForm, senha: e.target.value})} required />
+        </div>
+        <motion.button type="submit" className="btn-primary" {...buttonHoverTap}>
+          <UserPlus size={16} /> Registar Localmente
+        </motion.button>
+      </form>
+      
+      {/* Itens 15 & 16: Lista de Eventos */}
+      <div className="lista-eventos" style={{marginTop: '2rem'}}>
+        <h3>Itens 15 & 16: Inscrever e Fazer Check-in (Offline)</h3>
+        {localData.eventos.map(evento => {
+          const inscricao = getInscricaoLocal(evento.id_server);
           const temCheckin = hasCheckin(inscricao);
-
           return (
-            <div key={evento.id} style={{ border: '1px solid #ccc', padding: '10px', marginBottom: '10px' }}>
-              <h4>{evento.nome} (ID: {evento.id})</h4>
-              <p>{evento.descricao}</p>
-
-              {/* --- Lógica de Botões (Item 15 e 16) --- */}
-
-              {/* 1. Se não está inscrito: */}
-              {!estaInscrito && (
-                <button onClick={() => handleInscricaoLocal(evento.id)}>
-                  Inscrever-se Localmente
-                </button>
+            <motion.div key={evento.id_server} className="card-evento" variants={itemVariants}>
+              <h4>{evento.nome}</h4>
+              <p>{new Date(evento.data).toLocaleString()}</p>
+              
+              {!inscricao && (
+                <motion.button onClick={() => handleSubscribeOffline(evento.id_server)} disabled={!lastLocalUser} {...buttonHoverTap}>
+                  Inscrever "{lastLocalUser?.nome || 'Participante 3'}" (Item 15)
+                </motion.button>
               )}
-
-              {/* 2. Se está inscrito, mas sem check-in: */}
-              {estaInscrito && !temCheckin && (
+              {inscricao && !temCheckin && (
                 <>
-                  <span style={{ color: 'green', marginRight: '10px' }}>✓ Inscrito Localmente</span>
-                  <button onClick={() => handlePresencaLocal(evento.id)}>
-                    Registrar Presença (Item 16)
-                  </button>
+                  <span className="status-checkin checkin-ok">✓ Inscrito Localmente</span>
+                  <motion.button onClick={() => handleCheckinOffline(inscricao.id_local)} className="btn-inscrever" {...buttonHoverTap}>
+                    <Check size={16} /> Registar Presença (Item 16)
+                  </motion.button>
                 </>
               )}
-
-              {/* 3. Se está inscrito E com check-in: */}
-              {estaInscrito && temCheckin && (
-                <span style={{ color: 'blue', fontWeight: 'bold' }}>
-                  ✓ Presença Registrada
+              {temCheckin && (
+                <span className="status-checkin checkin-ok" style={{fontWeight: 'bold'}}>
+                  ✓ Presença Registada Localmente
                 </span>
               )}
-
-            </div>
+            </motion.div>
           );
         })}
       </div>
     </div>
   );
+
+  return (
+    // Usa as classes de CSS do portal-web
+    <div className="App dark"> 
+      <header className="App-header">
+        <h1>App Local (Check-in)</h1>
+        <p className={`status-message ${loading ? 'loading' : ''}`}>{message}</p>
+      </header>
+      <div className="conteudo">
+        <AnimatePresence mode="wait">
+          <motion.div 
+            key={appState} 
+            variants={pageVariants} 
+            initial="initial" 
+            animate="in" 
+            exit="out"
+          >
+            {appState === AppState.LOGGED_OUT && renderLoggedOut()}
+            {appState === AppState.ONLINE && renderOnline()}
+            {appState === AppState.OFFLINE && renderOffline()}
+          </motion.div>
+        </AnimatePresence>
+      </div>
+    </div>
+  );
 }
 
+// Renderiza a aplicação React
 const root = createRoot(document.getElementById('root'));
 root.render(<App />);

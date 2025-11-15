@@ -345,3 +345,18 @@ def read_minhas_presencas(
     ).all()
     
     return presencas
+
+@app.get("/inscricoes/all", response_model=List[schemas.InscricaoComDetalhes])
+def read_all_inscricoes(
+    db: Session = Depends(get_db),
+    admin_user: security.User = Depends(security.get_current_admin_user)
+):
+    """
+    Consulta TODAS as inscrições de todos os usuários.
+    Acesso restrito a administradores (atendentes).
+    """
+    inscricoes = db.query(models.Inscricao).options(
+        joinedload(models.Inscricao.evento)
+    ).all()
+    
+    return inscricoes
