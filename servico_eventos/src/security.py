@@ -1,68 +1,125 @@
 # servico_eventos/src/security.py
+
+"""
+Módulo responsável por autenticação e autorização no serviço de eventos.
+Se o token for válido, este serviço recebe os dados do usuário já autenticado.
+"""
+
 import os
-import httpx  # Importe o httpx
-from fastapi import Depends, HTTPException, status
+import httpx
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from pydantic import BaseModel, EmailStr
 from typing import Optional
 
-# Endereço interno do serviço de usuários no Docker
-USER_SERVICE_URL = "http://servico_usuarios:8000/usuarios/me"
+from servico_comum.logger import configure_logger
 
-# Esta rota '/auth' é fictícia, apenas para o Swagger
+
+# ============================================================
+#  LOGGER CORPORATIVO
+# ============================================================
+
+logger = configure_logger("servico_eventos.security")
+
+
+# ============================================================
+#  CONFIGURAÇÃO DO ENDPOINT DE VALIDAÇÃO NO SERVICO_USUARIOS
+# ============================================================
+
+USER_SERVICE_URL = os.getenv(
+    "USER_SERVICE_URL",
+    "http://servico_usuarios:8000/usuarios/me"
+)
+
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth")
 
-# --- Novo Schema ---
-# Precisamos de um schema para validar a resposta 
-# que esperamos do servico_usuarios
+
+# ============================================================
+#  SCHEMA CORPORATIVO DO USUÁRIO
+# ============================================================
+
 class User(BaseModel):
     id: int
     username: str
     email: Optional[EmailStr] = None
     full_name: Optional[str] = None
+    is_admin: bool = False
+    is_active: bool = True
+    is_verified: bool = False
 
-# --- Dependência Principal ---
 
-async def get_current_user(token: str = Depends(oauth2_scheme)):
+# ============================================================
+#  AUTH – PRINCIPAL DEPENDENCY
+# ============================================================
+
+async def get_current_user(
+    request: Request,
+    token: str = Depends(oauth2_scheme)
+):
     """
-    Dependência que valida o token fazendo uma chamada interna
-    ao servico_usuarios e retorna o objeto User completo.
+    Encaminha o token ao servico_usuarios.
+    Caso o usuário seja válido, devolve o User corporativo.
     """
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Não foi possível validar as credenciais",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
 
-    headers = {"Authorization": f"Bearer {token}"}
-    
-    # Usamos um cliente HTTP assíncrono
-    async with httpx.AsyncClient() as client:
-        try:
+    # Headers seguros
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "X-Request-ID": getattr(request.state, "request_id", None)
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=5) as client:
             response = await client.get(USER_SERVICE_URL, headers=headers)
-            
-            # Se o servico_usuarios retornar 401, repassamos o erro
-            if response.status_code == 401:
-                raise credentials_exception
-            
-            response.raise_for_status() # Levanta erro para 500, 404, etc.
-            
-            # Converte a resposta JSON no nosso Pydantic model
-            user = User(**response.json())
-            return user
 
-        except (httpx.RequestError, httpx.HTTPStatusError):
-            # Erro de conexão ou erro inesperado do servico_usuarios
-            raise credentials_exception
-        
+        if response.status_code == 401:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Credenciais inválidas",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
 
-def get_current_admin_user(current_user: User = Depends(get_current_user)):
+        # Levanta exceções para 404, 500, etc.
+        response.raise_for_status()
+
+        data = response.json()
+
+        # Converte para schema corporativo
+        user = User(**data)
+
+        if not user.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Conta inativa"
+            )
+
+        return user
+
+    except httpx.TimeoutException:
+        logger.error("Timeout ao contatar servico_usuarios")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="serviço de autenticação indisponível"
+        )
+
+    except httpx.RequestError as exc:
+        logger.error("Erro de rede ao chamar servico_usuarios", extra={"error": str(exc)})
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="serviço de autenticação indisponível"
+        )
+
+
+# ============================================================
+#  RBAC
+# ============================================================
+
+def get_current_admin_user(user: User = Depends(get_current_user)):
     """
-    Dependência que re-utiliza get_current_user e verifica o flag 'is_admin'.
+    Verifica se o usuário autenticado possui papel de admin.
     """
-    if not current_user.is_admin:
+    if not user.is_admin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Acesso restrito a administradores"
         )
-    return current_user
+    return user

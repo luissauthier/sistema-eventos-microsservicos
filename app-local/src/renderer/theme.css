@@ -1,0 +1,140 @@
+/* ============================================================
+   SISTEMA DE DESIGN – NEXSTAGE EVENTOS
+   Tema alinhado ao logotipo oficial
+   Cores principais extraídas do logo (Azul NexStage)
+   ============================================================ */
+
+/* Fonte padrão */
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap");
+
+:root {
+  --font-primary: 'Inter', sans-serif;
+}
+
+/* ------------------------------------------------------------
+   PALETA INSTITUCIONAL – DARK MODE (DEFAULT)
+   ------------------------------------------------------------ */
+
+:root {
+  /* Fundo */
+  --bg: #0D0D0F;
+  --bg-soft: #121214;
+  --bg-card: #161619;
+
+  /* Bordas */
+  --border: #262626;
+
+  /* Texto */
+  --text: #FFFFFF;
+  --text-muted: #C8C8C8;
+
+  /* Identidade NEXSTAGE */
+  --primary: #2D7DFF;
+  --primary-hover: #5496FF;
+  --primary-soft: rgba(45, 125, 255, 0.15);
+
+  /* Estados */
+  --success: #3CBF7F;
+  --success-soft: rgba(60, 191, 127, 0.15);
+
+  --danger: #D64545;
+  --danger-soft: rgba(214, 69, 69, 0.15);
+
+  --warning: #E7A93C;
+  --warning-soft: rgba(231, 169, 60, 0.15);
+
+  /* Raio e sombras */
+  --radius: 12px;
+  --shadow: rgba(0, 0, 0, 0.35);
+}
+
+/* ------------------------------------------------------------
+   LIGHT MODE (opcional no futuro)
+   ------------------------------------------------------------ */
+
+.light {
+  --bg: #F8F9FC;
+  --bg-soft: #FFFFFF;
+  --bg-card: #FFFFFF;
+
+  --border: #D5D7DB;
+
+  --text: #131313;
+  --text-muted: #555;
+
+  --primary: #2D7DFF;
+  --primary-hover: #4F90FF;
+  --primary-soft: rgba(45, 125, 255, 0.15);
+
+  --success: #2FA469;
+  --danger: #C43C3C;
+  --warning: #BF8C2D;
+}
+
+/* ------------------------------------------------------------
+   COMPONENTES BÁSICOS
+   ------------------------------------------------------------ */
+
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-primary);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 10px; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 10px; }
+
+/* Cards */
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  padding: 1.2rem;
+  border-radius: var(--radius);
+  box-shadow: 0px 4px 12px var(--shadow);
+}
+
+/* Botões */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 500;
+  padding: 0.65rem 1.1rem;
+  border-radius: var(--radius);
+  border: none;
+  cursor: pointer;
+  transition: 0.15s ease;
+}
+
+.btn-primary {
+  background: var(--primary);
+  color: #FFFFFF;
+}
+
+.btn-primary:hover {
+  background: var(--primary-hover);
+}
+
+.btn-soft {
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
+/* Inputs */
+.input {
+  width: 100%;
+  padding: 0.75rem;
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+}
+
+.input:focus {
+  border-color: var(--primary);
+  outline: none;
+}

@@ -1,87 +1,217 @@
 // servico_notificacoes/src/index.js
-require('dotenv').config(); // Carrega .env (MAIL_HOST, MAIL_USER, etc.)
-const express = require('express');
-const nodemailer = require('nodemailer');
+require("dotenv").config();
+
+const express = require("express");
+const nodemailer = require("nodemailer");
+const { randomUUID } = require("crypto");
+
+// ============================================================
+//  LOGGER PROFISSIONAL
+// ============================================================
+
+const logger = (label, extra = {}) => {
+  const log = {
+    timestamp: new Date().toISOString(),
+    service: "servico_notificacoes",
+    label,
+    ...extra,
+  };
+  console.log(JSON.stringify(log));
+};
+
+
+// ============================================================
+//  VALIDAÇÃO DE VARIÁVEIS DE AMBIENTE
+// ============================================================
+
+function envRequired(name) {
+  const value = process.env[name];
+  if (!value) {
+    logger("missing_env", { variable: name });
+    throw new Error(`Variável obrigatória ausente: ${name}`);
+  }
+  return value;
+}
+
+const SMTP_HOST = envRequired("SMTP_HOST");
+const SMTP_USER = envRequired("SMTP_USER");
+const SMTP_PASS = envRequired("SMTP_PASS");
+const MAIL_FROM = process.env.MAIL_FROM || "no-reply@sistema.com";
+
+
+// ============================================================
+//  EXPRESS + MIDDLEWARES
+// ============================================================
+
 const app = express();
-app.use(express.json()); // Middleware para ler JSON body
+app.use(express.json());
 
-const PORT = process.env.PORT || 8004;
+// Adiciona request_id para rastreamento cross-service
+app.use((req, res, next) => {
+  req.request_id = randomUUID();
+  res.setHeader("X-Request-ID", req.request_id);
+  next();
+});
 
-// 1. Configurar o "Transporter" (como o e-mail será enviado)
-// (Usando Mailtrap/SMTP genérico como exemplo)
+
+// ============================================================
+//  SMTP TRANSPORT (Nodemailer)
+// ============================================================
+
 const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
+  host: SMTP_HOST,
   port: process.env.SMTP_PORT || 587,
-  secure: false, // true for 465, false for other ports
+  secure: false,
   auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
+    user: SMTP_USER,
+    pass: SMTP_PASS,
   },
 });
 
-app.get('/', (req, res) => {
-  res.send('Serviço de Notificações (Node.js) está online');
+
+// ============================================================
+//  FUNÇÃO DE RETRY (3 TENTATIVAS)
+// ============================================================
+
+async function sendWithRetry(mailOptions, requestId) {
+  let delay = 300;
+
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      await transporter.sendMail(mailOptions);
+
+      logger("email_sent", {
+        attempt,
+        requestId,
+        to: mailOptions.to,
+        subject: mailOptions.subject,
+      });
+
+      return true;
+
+    } catch (err) {
+      logger("email_send_error", {
+        attempt,
+        requestId,
+        error: err.message,
+      });
+
+      if (attempt < 3) {
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        delay *= 2; // exponential backoff
+      }
+    }
+  }
+
+  return false;
+}
+
+
+// ============================================================
+//  TEMPLATES DE E-MAIL
+// ============================================================
+
+function buildEmailTemplate(tipo, nome, nome_evento) {
+  switch (tipo) {
+    case "inscricao":
+      return {
+        subject: `Confirmação de Inscrição: ${nome_evento}`,
+        text: `Olá ${nome}, sua inscrição no evento ${nome_evento} foi confirmada!`,
+        html: `<p>Olá <strong>${nome}</strong>,<br>Sua inscrição no evento <strong>${nome_evento}</strong> foi confirmada!</p>`,
+      };
+
+    case "cancelamento":
+      return {
+        subject: `Inscrição Cancelada: ${nome_evento}`,
+        text: `Olá ${nome}, sua inscrição no evento ${nome_evento} foi cancelada.`,
+        html: `<p>Olá <strong>${nome}</strong>,<br>Sua inscrição no evento <strong>${nome_evento}</strong> foi cancelada.</p>`,
+      };
+
+    case "checkin":
+      return {
+        subject: `Check-in Confirmado: ${nome_evento}`,
+        text: `Olá ${nome}, seu check-in no evento ${nome_evento} foi registrado!`,
+        html: `<p>Olá <strong>${nome}</strong>,<br>Seu check-in no evento <strong>${nome_evento}</strong> foi registrado!</p>`,
+      };
+
+    case "certificado":
+      return {
+        subject: `Seu Certificado Está Pronto: ${nome_evento}`,
+        text: `Olá ${nome}, seu certificado do evento ${nome_evento} está disponível!`,
+        html: `<p>Olá <strong>${nome}</strong>,<br>Seu certificado para o evento <strong>${nome_evento}</strong> está disponível!</p>`,
+      };
+
+    default:
+      return null;
+  }
+}
+
+
+// ============================================================
+//  HEALTHCHECK PROFISSIONAL
+// ============================================================
+
+app.get("/health", async (req, res) => {
+  try {
+    await transporter.verify();
+    res.json({ status: "ok", smtp: "connected" });
+  } catch {
+    res.status(503).json({ status: "error", smtp: "unavailable" });
+  }
 });
 
-// ==========================================================
-// IMPLEMENTAÇÃO 5: LÓGICA REAL DE E-MAIL
-// ==========================================================
-app.post('/emails', async (req, res) => {
-  console.log("Recebida solicitação para POST /emails");
+
+// ============================================================
+//  POST /emails — ENVIO DE E-MAIL PROFISSIONAL
+// ============================================================
+
+app.post("/emails", async (req, res) => {
+  const requestId = req.request_id;
+  logger("email_request_received", { requestId, body: req.body });
+
   const { tipo, destinatario, nome, nome_evento } = req.body;
 
-  if (!tipo || !destinatario) {
-    return res.status(400).json({ message: "Dados insuficientes (tipo, destinatario)" });
+  // Validação forte
+  if (!tipo || !destinatario || !nome) {
+    return res.status(400).json({
+      error: "Campos obrigatórios ausentes: tipo, destinatario, nome",
+      requestId
+    });
   }
 
-  let subject = "";
-  let text = "";
-  let html = "";
-
-  // 2. Selecionar o Template
-  switch (tipo) {
-    case 'inscricao':
-      subject = `Confirmação de Inscrição: ${nome_evento}`;
-      text = `Olá ${nome}, sua inscrição no evento ${nome_evento} foi confirmada!`;
-      html = `<p>Olá <strong>${nome}</strong>,</p><p>Sua inscrição no evento <strong>${nome_evento}</strong> foi confirmada!</p>`;
-      break;
-    case 'cancelamento':
-      subject = `Inscrição Cancelada: ${nome_evento}`;
-      text = `Olá ${nome}, sua inscrição no evento ${nome_evento} foi cancelada.`;
-      html = `<p>Olá <strong>${nome}</strong>,</p><p>Sua inscrição no evento <strong>${nome_evento}</strong> foi cancelada.</p>`;
-      break;
-    case 'checkin':
-      subject = `Check-in Confirmado: ${nome_evento}`;
-      text = `Olá ${nome}, seu check-in no evento ${nome_evento} foi registrado! Esperamos que aproveite.`;
-      html = `<p>Olá <strong>${nome}</strong>,</p><p>Seu check-in no evento <strong>${nome_evento}</strong> foi registrado! Esperamos que aproveite.</p>`;
-      break;
-    default:
-      console.warn(`Tipo de e-mail desconhecido: ${tipo}`);
-      return res.status(400).json({ message: "Tipo de e-mail inválido" });
+  const template = buildEmailTemplate(tipo, nome, nome_evento);
+  if (!template) {
+    return res.status(400).json({ error: "Tipo de e-mail inválido", requestId });
   }
 
-  // 3. Definir opções de envio
   const mailOptions = {
-    from: `"Sistema de Eventos" <${process.env.MAIL_FROM || 'nao-responda@eventos.com'}>`,
+    from: `"Sistema de Eventos" <${MAIL_FROM}>`,
     to: destinatario,
-    subject: subject,
-    text: text,
-    html: html,
+    subject: template.subject,
+    text: template.text,
+    html: template.html,
   };
 
-  try {
-    // 4. Enviar o e-mail
-    await transporter.sendMail(mailOptions);
-    console.log(`E-mail enviado (${tipo}) para: ${destinatario}`);
-    res.status(202).json({ message: "Solicitação de e-mail enviada" });
-  } catch (error) {
-    console.error(`Falha ao enviar e-mail para ${destinatario}: ${error.message}`);
-    // Não retorna 500, pois este é um serviço assíncrono.
-    // O ideal seria enfileirar para retentativa (ex: RabbitMQ).
-    res.status(202).json({ message: "Solicitação aceita, mas falha no envio." });
+  const success = await sendWithRetry(mailOptions, requestId);
+
+  if (success) {
+    return res.status(202).json({ status: "enqueued", requestId });
   }
+
+  // Mesmo falhando, retornamos 202
+  return res.status(202).json({
+    status: "accepted_but_failed",
+    requestId
+  });
 });
 
+
+// ============================================================
+//  INICIALIZAÇÃO DO SERVIÇO
+// ============================================================
+
+const PORT = process.env.PORT || 8004;
+
 app.listen(PORT, () => {
-  console.log(`Serviço de Notificações rodando na porta ${PORT}`);
+  logger("service_started", { port: PORT });
 });

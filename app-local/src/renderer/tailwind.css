@@ -1,0 +1,11 @@
+/* tailwind.css */
+@import "/theme.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Suavização aplicada globalmente */
+html, body {
+  -webkit-font-smoothing: antialiased;
+}

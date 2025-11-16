@@ -1,366 +1,450 @@
 # servico_eventos/src/main.py
-from fastapi import FastAPI, Depends, HTTPException, status
-from sqlalchemy.orm import Session
-from typing import List
-from fastapi import FastAPI, Depends, HTTPException, status, Query, BackgroundTasks
-import httpx # Para fazer chamadas HTTP
-import asyncio # Para rodar o "fire-and-forget"
-from sqlalchemy.orm import joinedload
 
-# Importa nossos módulos locais
+from fastapi import (
+    FastAPI, Depends, HTTPException, status, Query, BackgroundTasks, Request
+)
+from sqlalchemy.orm import Session, joinedload
+from typing import List
+from datetime import datetime, timedelta
+import httpx
+import asyncio
+
+# Infraestrutura corporativa
+from servico_comum.logger import configure_logger
+from servico_comum.middleware import RequestIDMiddleware
+from servico_comum.exceptions import (
+    ServiceError,
+    service_error_handler
+)
+from servico_comum.responses import success
+
+# Domínio local
 import models
 import schemas
-import security
+from security import get_current_user, get_current_admin_user, User
 from database import engine, get_db
 
-# Cria as tabelas no DB (eventos, inscricoes, presencas)
+
+# ============================================================
+#  INICIALIZAÇÃO DO SERVIÇO
+# ============================================================
+
 models.Base.metadata.create_all(bind=engine)
 
-NOTIFICATION_SERVICE_URL = "http://servico_notificacoes:8004/emails"
-
-async def send_notification(payload: dict):
-    """
-    Função "dispare e esqueça" para enviar e-mails.
-    """
-    try:
-        async with httpx.AsyncClient() as client:
-            await client.post(NOTIFICATION_SERVICE_URL, json=payload)
-        # Se falhar, nós (propositalmente) não fazemos nada.
-        # Em um sistema de produção, logaríamos o erro aqui.
-    except httpx.RequestError as e:
-        print(f"ALERTA: Falha ao conectar com o serviço de notificação: {e}")
+logger = configure_logger("servico_eventos")
 
 app = FastAPI(
     title="Serviço de Eventos e Inscrições",
-    version="1.0.0"
+    version="2.0.0",
+    description="Serviço robusto para gestão de eventos, inscrições, presença, certificados e integração offline."
 )
 
-# --- Endpoints de Eventos (Públicos) ---
+app.add_middleware(RequestIDMiddleware)
 
-@app.get("/eventos", response_model=List[schemas.Evento])
-def read_eventos(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    """
-    [cite_start]Consulta todos os eventos vigentes. [cite: 48]
-    Esta rota é PÚBLICA, não requer token.
-    """
-    eventos = db.query(models.Evento).offset(skip).limit(limit).all()
-    return eventos
+# Handlers globais de exceções
+app.add_exception_handler(ServiceError, service_error_handler)
+app.add_exception_handler(Exception, service_error_handler)
 
-@app.get("/eventos/{id}", response_model=schemas.Evento)
-def read_evento(id: int, db: Session = Depends(get_db)):
-    """
-    [cite_start]Consulta um evento específico. [cite: 48]
-    Esta rota também é PÚBLICA.
-    """
-    evento = db.query(models.Evento).filter(models.Evento.id == id).first()
-    if evento is None:
-        raise HTTPException(status_code=404, detail="Evento não encontrado")
+
+# ============================================================
+#  FUNÇÃO DE NOTIFICAÇÕES (GARANTIDA - 3 RETENTATIVAS)
+# ============================================================
+
+NOTIFICATION_URL = "http://servico_notificacoes:8004/emails"
+
+async def send_notification_guaranteed(payload: dict):
+    delay = 0.5
+    for attempt in range(3):
+        try:
+            async with httpx.AsyncClient(timeout=3) as client:
+                await client.post(NOTIFICATION_URL, json=payload)
+            logger.info("notification_sent", extra=payload)
+            return
+        except httpx.RequestError as e:
+            logger.error("notification_failed", extra={"error": str(e), "attempt": attempt + 1})
+            await asyncio.sleep(delay)
+            delay *= 2  # backoff exponencial
+
+
+# ============================================================
+#  MIDDLEWARE DE LOG
+# ============================================================
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    start = datetime.utcnow()
+    response = await call_next(request)
+    duration = (datetime.utcnow() - start).total_seconds() * 1000
+
+    logger.info("request_completed", extra={
+        "path": request.url.path,
+        "method": request.method,
+        "status": response.status_code,
+        "duration_ms": duration,
+        "request_id": getattr(request.state, "request_id", None)
+    })
+
+    return response
+
+
+# ============================================================
+#                     ROTAS PÚBLICAS — EVENTOS
+# ============================================================
+
+@app.get("/eventos", response_model=List[schemas.Evento], tags=["Eventos"])
+def list_eventos(db: Session = Depends(get_db)):
+    return db.query(models.Evento).all()
+
+
+@app.get("/eventos/{id}", response_model=schemas.Evento, tags=["Eventos"])
+def get_evento(id: int, db: Session = Depends(get_db)):
+    evento = db.query(models.Evento).filter_by(id=id).first()
+    if not evento:
+        raise ServiceError("Evento não encontrado", 404)
     return evento
 
-@app.post("/eventos", response_model=schemas.Evento, status_code=status.HTTP_201_CREATED)
+
+# ============================================================
+#                 ADMIN – CRIAÇÃO DE EVENTOS
+# ============================================================
+
+@app.post("/admin/eventos", response_model=schemas.Evento, status_code=201, tags=["Admin"])
 def create_evento(
-    evento: schemas.EventoCreate, 
+    data: schemas.EventoCreate,
     db: Session = Depends(get_db),
-    # Protegido! Só usuários logados podem criar eventos.
-    current_username: str = Depends(security.get_current_user)
+    admin: User = Depends(get_current_admin_user)
 ):
-    """
-    Cria um novo evento.
-    Esta rota é PROTEGIDA.
-    """
-    db_evento = models.Evento(
-        nome=evento.nome,
-        descricao=evento.descricao,
-        data_evento=evento.data_evento
+    evento = models.Evento(
+        nome=data.nome,
+        descricao=data.descricao,
+        data_evento=data.data_evento
     )
-    db.add(db_evento)
+    db.add(evento)
     db.commit()
-    db.refresh(db_evento)
-    return db_evento
+    db.refresh(evento)
+    logger.info("evento_created", extra={"evento_id": evento.id})
+    return evento
 
-# --- Endpoints de Inscrições (Protegidos) ---
 
-@app.post("/inscricoes", response_model=schemas.Inscricao, status_code=status.HTTP_201_CREATED)
+# ============================================================
+#                USUÁRIO — INSCRIÇÃO EM EVENTOS
+# ============================================================
+
+@app.post("/inscricoes", response_model=schemas.Inscricao, status_code=201, tags=["Inscrições"])
 def create_inscricao(
-    inscricao: schemas.InscricaoCreate, 
-    background_tasks: BackgroundTasks,
+    body: schemas.InscricaoCreate,
+    background: BackgroundTasks,
     db: Session = Depends(get_db),
-    current_user: security.User = Depends(security.get_current_user),
+    user: User = Depends(get_current_user)
 ):
-    """
-    Registra uma inscrição.
-    Esta rota é PROTEGIDA.
-    """
-    
-    # Verifica se o evento existe
-    evento = db.query(models.Evento).filter(models.Evento.id == inscricao.evento_id).first()
+    evento = db.query(models.Evento).filter_by(id=body.evento_id).first()
     if not evento:
-        raise HTTPException(status_code=404, detail="Evento não encontrado")
-        
-    # ---- CORREÇÃO DA DÍVIDA TÉCNICA ----
-    # Agora usamos os dados reais do token
-    db_inscricao = models.Inscricao(
-        evento_id=inscricao.evento_id,
-        usuario_id=current_user.id,          # <-- CORRIGIDO
-        usuario_username=current_user.username # <-- CORRIGIDO
+        raise ServiceError("Evento não encontrado", 404)
+
+    # Idempotência
+    existente = db.query(models.Inscricao).filter_by(
+        usuario_id=user.id,
+        evento_id=body.evento_id
+    ).first()
+    if existente:
+        return existente
+
+    insc = models.Inscricao(
+        evento_id=body.evento_id,
+        usuario_id=user.id,
+        usuario_username=user.username
     )
-    db.add(db_inscricao)
+
+    db.add(insc)
     db.commit()
-    db.refresh(db_inscricao)
-    payload = {
+    db.refresh(insc)
+
+    background.add_task(send_notification_guaranteed, {
         "tipo": "inscricao",
-        "destinatario": current_user.email,
-        "nome": current_user.full_name or current_user.username,
-        "nome_evento": "Nome do Evento" # TODO: Buscar o nome do evento
-    }
-    background_tasks.add_task(send_notification, payload)
-    return db_inscricao
+        "destinatario": user.email,
+        "nome": user.full_name or user.username,
+        "nome_evento": evento.nome
+    })
 
-# --- Endpoint de Presença (Protegido - Nível Atendente) ---
+    return insc
 
-@app.post("/presencas", response_model=schemas.Presenca, status_code=status.HTTP_201_CREATED)
-def register_presenca(
-    presenca: schemas.PresencaCreate,
-    background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db),
-    current_admin: security.User = Depends(security.get_current_admin_user)
-):
-    """
-    Registra uma presença (check-in) para uma inscrição.
-    Esta rota é PROTEGIDA e restrita a Atendentes (Admins).
-    """
-    
-    # 1. Encontra a inscrição que está fazendo check-in
-    db_inscricao = db.query(models.Inscricao).filter(
-        models.Inscricao.id == presenca.inscricao_id
-    ).first()
 
-    if db_inscricao is None:
-        raise HTTPException(status_code=404, detail="Inscrição não encontrada")
+# ============================================================
+#        USUÁRIO — CONSULTA DE UMA INSCRIÇÃO ESPECÍFICA
+# ============================================================
 
-    # 2. Verifica se o check-in já foi feito
-    db_presenca_existente = db.query(models.Presenca).filter(
-        models.Presenca.inscricao_id == presenca.inscricao_id
-    ).first()
-    
-    if db_presenca_existente:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Check-in já realizado para esta inscrição"
-        )
-
-    # 3. Registra a presença
-    db_presenca = models.Presenca(
-        inscricao_id=db_inscricao.id,
-        usuario_id=db_inscricao.usuario_id,
-        evento_id=db_inscricao.evento_id
-    )
-    
-    db.add(db_presenca)
-    db.commit()
-    db.refresh(db_presenca)
-    
-    payload = {
-        "tipo": "checkin",
-        "destinatario": "email_do_participante@teste.com", # TODO: Buscar e-mail
-        "nome": "Nome do Participante", # TODO: Buscar nome
-        "nome_evento": "Nome do Evento" # TODO: Buscar nome
-    }
-    payload["destinatario"] = current_admin.email
-    payload["nome"] = current_admin.full_name or current_admin.username
-    
-    asyncio.create_task(send_notification(payload))
-
-    return db_presenca
-
-@app.delete("/inscricoes", status_code=status.HTTP_200_OK)
-def delete_inscricao(
-    # O ID é passado como um parâmetro de consulta, ex: /inscricoes?id=1
-    background_tasks: BackgroundTasks,
-    inscricao_id: int = Query(..., alias="id"), 
-    db: Session = Depends(get_db),
-    current_user: security.User = Depends(security.get_current_user)
-):
-    """
-    Cancela uma inscrição.
-    Esta rota é PROTEGIDA.
-    """
-    
-    # 1. Encontra a inscrição no banco de dados
-    db_inscricao = db.query(models.Inscricao).filter(
-        models.Inscricao.id == inscricao_id
-    ).first()
-
-    # 2. Verifica se a inscrição existe
-    if db_inscricao is None:
-        raise HTTPException(status_code=404, detail="Inscrição não encontrada")
-
-    # 3. VERIFICAÇÃO DE SEGURANÇA CRÍTICA:
-    # O usuário logado (do token) é o dono desta inscrição?
-    if db_inscricao.usuario_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, 
-            detail="Você não tem permissão para cancelar esta inscrição"
-        )
-        
-    # 4. Verifica se já existe um check-in (regra de negócio)
-    # Não podemos cancelar uma inscrição se o usuário já compareceu
-    db_presenca = db.query(models.Presenca).filter(
-        models.Presenca.inscricao_id == inscricao_id
-    ).first()
-    
-    if db_presenca:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Não é possível cancelar: esta inscrição já possui um check-in."
-        )
-
-    # 5. Tudo certo, pode deletar
-    db.delete(db_inscricao)
-    db.commit()
-    
-    payload = {
-        "tipo": "cancelamento",
-        "destinatario": current_user.email,
-        "nome": current_user.full_name or current_user.username,
-        "nome_evento": "Nome do Evento" # TODO: Buscar o nome do evento
-    }
-    background_tasks.add_task(send_notification, payload)
-
-    return {"message": "Inscrição cancelada com sucesso"}
-
-@app.get("/inscricoes/{id}", response_model=schemas.Inscricao)
-def read_inscricao(
+@app.get("/inscricoes/{id}", response_model=schemas.Inscricao, tags=["Inscrições"])
+def get_inscricao(
     id: int,
     db: Session = Depends(get_db),
-    current_user: security.User = Depends(security.get_current_user)
+    user: User = Depends(get_current_user)
 ):
-    """
-    Consulta os detalhes de uma inscrição específica.
-    Esta rota é PROTEGIDA.
-    """
-    
-    # 1. Encontra a inscrição no banco de dados
-    db_inscricao = db.query(models.Inscricao).filter(
-        models.Inscricao.id == id
-    ).first()
+    insc = db.query(models.Inscricao).filter_by(id=id).first()
+    if not insc:
+        raise ServiceError("Inscrição não encontrada", 404)
 
-    # 2. Verifica se a inscrição existe
-    if db_inscricao is None:
-        raise HTTPException(status_code=404, detail="Inscrição não encontrada")
+    if insc.usuario_id != user.id:
+        raise ServiceError("Acesso negado", 403)
 
-    # 3. VERIFICAÇÃO DE SEGURANÇA CRÍTICA:
-    # O usuário logado (do token) é o dono desta inscrição?
-    if db_inscricao.usuario_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, 
-            detail="Você não tem permissão para visualizar esta inscrição"
-        )
-        
-    # 4. Tudo certo, retorna a inscrição
-    return db_inscricao
+    return insc
 
-@app.get("/inscricoes/me", response_model=List[schemas.InscricaoComDetalhes])
-def read_minhas_inscricoes(
+
+# ============================================================
+#              USUÁRIO — LISTAR MINHAS INSCRIÇÕES
+# ============================================================
+
+@app.get("/inscricoes/me", response_model=List[schemas.InscricaoDetalhes], tags=["Inscrições"])
+def minhas_inscricoes(
     db: Session = Depends(get_db),
-    current_user: security.User = Depends(security.get_current_user)
+    user: User = Depends(get_current_user)
 ):
-    """
-    Consulta todas as inscrições do usuário logado.
-    """
-    
-    # Esta é a consulta profissional:
-    # 1. Filtra por 'usuario_id' (do token)
-    # 2. Usa 'options(joinedload(models.Inscricao.evento))' 
-    #    para fazer o JOIN e carregar os dados do evento
-    #    junto com a inscrição (evita N+1 queries).
-    inscricoes = db.query(models.Inscricao).options(
+    return db.query(models.Inscricao).options(
         joinedload(models.Inscricao.evento)
-    ).filter(
-        models.Inscricao.usuario_id == current_user.id
-    ).all()
-    
-    return inscricoes
+    ).filter_by(usuario_id=user.id).all()
 
-@app.get("/presencas/me", response_model=List[schemas.Presenca])
-def read_minhas_presencas(
+
+# ============================================================
+#           USUÁRIO — CANCELAMENTO (PATCH, NÃO DELETE)
+# ============================================================
+
+@app.patch("/inscricoes/{id}/cancelar", tags=["Inscrições"])
+def cancelar_inscricao(
+    id: int,
+    body: schemas.InscricaoCancelamento,
+    background: BackgroundTasks,
     db: Session = Depends(get_db),
-    current_user: security.User = Depends(security.get_current_user)
+    user: User = Depends(get_current_user)
 ):
-    """
-    Consulta todos os registos de presença do usuário logado.
-    """
-    presencas = db.query(models.Presenca).filter(
-        models.Presenca.usuario_id == current_user.id
-    ).all()
-    
-    return presencas
+    insc = db.query(models.Inscricao).filter_by(id=id).first()
+    if not insc:
+        raise ServiceError("Inscrição não encontrada", 404)
 
-@app.get("/inscricoes/all", response_model=List[schemas.Inscricao]) # <-- MUDANÇA 1: Mude para 'Inscricao'
-def read_all_inscricoes(
-    db: Session = Depends(get_db),
-    admin_user: security.User = Depends(security.get_current_admin_user)
-):
-    """
-    Consulta TODAS as inscrições de todos os usuários.
-    Acesso restrito a administradores (atendentes).
-    """
-    
-    inscricoes = db.query(models.Inscricao).options(
-        joinedload(models.Inscricao.evento),
-        joinedload(models.Inscricao.usuario)
-    ).all()
-    
-    return inscricoes
+    if insc.usuario_id != user.id:
+        raise ServiceError("Você não pode cancelar esta inscrição", 403)
 
-@app.post("/admin/inscricoes", response_model=schemas.Inscricao, status_code=status.HTTP_201_CREATED, tags=["Admin"])
-def admin_create_inscricao(
-    inscricao: schemas.AdminInscricaoCreate, # Novo DTO necessário
-    background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db),
-    current_admin: security.User = Depends(security.get_current_admin_user),
-):
-    """
-    (Admin) Registra uma inscrição para um usuário específico.
-    Usado pelo App Local (offline) para sincronização.
-    """
-    
-    # 1. Verifica se o evento existe
-    evento = db.query(models.Evento).filter(models.Evento.id == inscricao.evento_id).first()
-    if not evento:
-        raise HTTPException(status_code=404, detail="Evento não encontrado")
+    presenca = db.query(models.Presenca).filter_by(inscricao_id=id).first()
+    if presenca:
+        raise ServiceError("Não é possível cancelar: já houve presença", 400)
 
-    # 2. Verifica se o usuário existe
-    usuario = db.query(models.User).filter(models.User.id == inscricao.usuario_id).first()
-    if not usuario:
-        raise HTTPException(status_code=404, detail="Usuário alvo não encontrado")
-        
-    # 3. Verifica se a inscrição já existe (Idempotência)
-    inscricao_existente = db.query(models.Inscricao).filter(
-        models.Inscricao.evento_id == inscricao.evento_id,
-        models.Inscricao.usuario_id == inscricao.usuario_id
-    ).first()
-    
-    if inscricao_existente:
-        return inscricao_existente
+    insc.status = models.InscricaoStatus.CANCELADA
+    insc.updated_at = datetime.utcnow()
 
-    # 4. Cria a inscrição para o usuário-alvo
-    db_inscricao = models.Inscricao(
-        evento_id=inscricao.evento_id,
-        usuario_id=usuario.id,
-        usuario_username=usuario.username
-    )
-    db.add(db_inscricao)
     db.commit()
-    db.refresh(db_inscricao)
-    
-    # (Notificação para o usuário-alvo, não para o admin)
-    payload = {
-        "tipo": "inscricao",
-        "destinatario": usuario.email,
-        "nome": usuario.full_name or usuario.username,
+
+    evento = insc.evento
+
+    background.add_task(send_notification_guaranteed, {
+        "tipo": "cancelamento",
+        "destinatario": user.email,
+        "nome": user.full_name or user.username,
         "nome_evento": evento.nome
-    }
-    background_tasks.add_task(send_notification, payload)
-    
-    return db_inscricao
+    })
+
+    return success("Inscrição cancelada com sucesso.")
+
+
+# ============================================================
+#                     ADMIN — LISTAR TODAS
+# ============================================================
+
+@app.get("/admin/inscricoes/all", response_model=List[schemas.Inscricao], tags=["Admin"])
+def listar_todas_inscricoes(
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin_user)
+):
+    return db.query(models.Inscricao).options(
+        joinedload(models.Inscricao.evento)
+    ).all()
+
+
+# ============================================================
+#         ADMIN — CRIAR INSCRIÇÃO PARA TERCEIROS
+# ============================================================
+
+@app.post("/admin/inscricoes", response_model=schemas.Inscricao, status_code=201, tags=["Admin"])
+def admin_create_inscricao(
+    body: schemas.InscricaoAdminCreate,
+    background: BackgroundTasks,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin_user)
+):
+    evento = db.query(models.Evento).filter_by(id=body.evento_id).first()
+    if not evento:
+        raise ServiceError("Evento não encontrado", 404)
+
+    # CONSULTA AO SERVIÇO DE USUÁRIOS
+    async def get_user(usuario_id):
+        async with httpx.AsyncClient() as client:
+            r = await client.get(f"http://servico_usuarios:8000/usuarios/{usuario_id}")
+            if r.status_code == 404:
+                raise ServiceError("Usuário não encontrado", 404)
+            r.raise_for_status()
+            return r.json()
+
+    usuario = asyncio.run(get_user(body.usuario_id))
+
+    existente = db.query(models.Inscricao).filter_by(
+        usuario_id=body.usuario_id,
+        evento_id=body.evento_id
+    ).first()
+
+    if existente:
+        return existente
+
+    insc = models.Inscricao(
+        evento_id=body.evento_id,
+        usuario_id=body.usuario_id,
+        usuario_username=usuario["username"]
+    )
+    db.add(insc)
+    db.commit()
+    db.refresh(insc)
+
+    background.add_task(send_notification_guaranteed, {
+        "tipo": "inscricao",
+        "destinatario": usuario["email"],
+        "nome": usuario["full_name"] or usuario["username"],
+        "nome_evento": evento.nome
+    })
+
+    return insc
+
+
+# ============================================================
+#                 ADMIN — CHECK-IN (PRESENÇA)
+# ============================================================
+
+@app.post("/admin/presencas/checkin", response_model=schemas.Presenca, status_code=201, tags=["Admin"])
+def registrar_presenca(
+    body: schemas.PresencaCreate,
+    background: BackgroundTasks,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin_user)
+):
+    insc = db.query(models.Inscricao).filter_by(id=body.inscricao_id).first()
+    if not insc:
+        raise ServiceError("Inscrição não encontrada", 404)
+
+    # Idempotência
+    existente = db.query(models.Presenca).filter_by(inscricao_id=body.inscricao_id).first()
+    if existente:
+        return existente
+
+    presenca = models.Presenca(
+        inscricao_id=insc.id,
+        usuario_id=insc.usuario_id,
+        evento_id=insc.evento_id,
+        origem=body.origem
+    )
+
+    db.add(presenca)
+    db.commit()
+    db.refresh(presenca)
+
+    # EMISSÃO AUTOMÁTICA DE CERTIFICADO
+    cert_existente = db.query(models.Certificado).filter_by(inscricao_id=insc.id).first()
+    if not cert_existente:
+        cert = models.Certificado(
+            inscricao_id=insc.id,
+            evento_id=insc.evento_id,
+            codigo_unico=models.generate_cert_hash()
+        )
+        db.add(cert)
+        db.commit()
+
+    background.add_task(send_notification_guaranteed, {
+        "tipo": "checkin",
+        "destinatario": None,  # carregamos se necessário
+        "nome_evento": insc.evento.nome
+    })
+
+    return presenca
+
+
+# ============================================================
+#          CERTIFICADOS — VALIDAR (PÚBLICO)
+# ============================================================
+
+@app.get("/certificados/validar/{codigo}", response_model=schemas.CertificadoValidacaoResponse, tags=["Certificados"])
+def validar_certificado(
+    codigo: str,
+    db: Session = Depends(get_db)
+):
+    cert = db.query(models.Certificado).filter_by(codigo_unico=codigo).first()
+    if not cert:
+        return schemas.CertificadoValidacaoResponse(valido=False)
+
+    return schemas.CertificadoValidacaoResponse(
+        valido=True,
+        evento=cert.evento.nome,
+        usuario=cert.inscricao.usuario_username,
+        data_emissao=cert.data_emissao
+    )
+
+
+# ============================================================
+#          CERTIFICADOS — EMISSÃO MANUAL (ADMIN)
+# ============================================================
+
+@app.post("/admin/certificados/emissao", response_model=schemas.Certificado, tags=["Admin"])
+def emitir_certificado(
+    inscricao_id: int = Query(...),
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin_user)
+):
+    insc = db.query(models.Inscricao).filter_by(id=inscricao_id).first()
+    if not insc:
+        raise ServiceError("Inscrição não encontrada", 404)
+
+    existente = db.query(models.Certificado).filter_by(inscricao_id=inscricao_id).first()
+    if existente:
+        return existente
+
+    cert = models.Certificado(
+        inscricao_id=insc.id,
+        evento_id=insc.evento_id,
+        codigo_unico=models.generate_cert_hash()
+    )
+    db.add(cert)
+    db.commit()
+    db.refresh(cert)
+    return cert
+
+
+# ============================================================
+#      ADMIN — SINCRONIZAÇÃO OFFLINE (PRESENÇAS)
+# ============================================================
+
+@app.post("/admin/sync/presencas", tags=["Admin"])
+def sync_presencas_offline(
+    payload: schemas.SyncPayload,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin_user)
+):
+    results = []
+
+    for item in payload.presencas:
+        insc = db.query(models.Inscricao).filter_by(id=item.inscricao_id).first()
+        if not insc:
+            continue
+
+        existente = db.query(models.Presenca).filter_by(inscricao_id=item.inscricao_id).first()
+        if existente:
+            continue
+
+        presenca = models.Presenca(
+            inscricao_id=insc.id,
+            usuario_id=insc.usuario_id,
+            evento_id=insc.evento_id,
+            origem=models.PresencaOrigem.SINCRONIZADO,
+            data_checkin=item.data_checkin
+        )
+
+        db.add(presenca)
+        db.commit()
+        results.append(presenca.id)
+
+    return success({
+        "sincronizadas": len(results),
+        "ids": results
+    })

@@ -1,134 +1,215 @@
 # servico_usuarios/src/main.py
-from fastapi import FastAPI, Depends, HTTPException, status
+
+from fastapi import FastAPI, Depends, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
-from datetime import timedelta
 from typing import List
+import time
 
-# Importa nossos módulos locais
+# --- Imports corporativos ---
+from servico_comum.logger import configure_logger
+from servico_comum.middleware import RequestIDMiddleware
+from servico_comum.exceptions import (
+    ServiceError,
+    service_error_handler,
+    validation_error_handler
+)
+from servico_comum.auth import (
+    get_current_user,
+    create_access_token,
+    require_roles
+)
+from servico_comum.responses import success
+
+# --- Imports locais ---
 import models
 import schemas
 import auth
 from database import engine, get_db
 
-# Isso cria as tabelas no DB (ex: a tabela "usuarios") se elas não existirem
+
+# ============================================================
+#  INITIALIZATION
+# ============================================================
+
 models.Base.metadata.create_all(bind=engine)
+
+logger = configure_logger("servico_usuarios")
 
 app = FastAPI(
     title="Serviço de Usuários",
     description="API para gerenciamento de usuários e autenticação",
-    version="1.0.0"
+    version="1.0.0",
 )
 
-# --- Endpoint de Cadastro  ---
-@app.post("/usuarios", response_model=schemas.User, status_code=status.HTTP_201_CREATED)
+app.add_middleware(RequestIDMiddleware)
+
+# Handlers globais
+app.add_exception_handler(ServiceError, service_error_handler)
+app.add_exception_handler(Exception, service_error_handler)
+
+
+# ============================================================
+#  MIDDLEWARE DE LOG CORPORATIVO
+# ============================================================
+
+@app.middleware("http")
+async def request_logger(request: Request, call_next):
+    start = time.time()
+    response = await call_next(request)
+    duration = (time.time() - start) * 1000
+
+    logger.info(
+        "request_completed",
+        extra={
+            "path": request.url.path,
+            "method": request.method,
+            "status": response.status_code,
+            "duration_ms": duration,
+            "request_id": getattr(request.state, "request_id", None)
+        }
+    )
+    return response
+
+
+# ============================================================
+#  ENDPOINT: CRIAÇÃO DE USUÁRIO
+# ============================================================
+
+@app.post(
+    "/usuarios",
+    response_model=schemas.User,
+    status_code=status.HTTP_201_CREATED,
+    tags=["Usuários"]
+)
 def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
-    # Verifica se o usuário já existe
-    db_user = db.query(models.User).filter(models.User.username == user.username).first()
-    if db_user:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Usuário já cadastrado"
-        )
-    
-    # Risco de Segurança: Hashing de Senha é OBRIGATÓRIO
-    # Nunca salve a senha direto!
+    """
+    Cadastro seguro de usuários.
+    """
+
+    # Verifica username duplicado
+    exists = db.query(models.User).filter(models.User.username == user.username).first()
+    if exists:
+        raise ServiceError("Usuário já cadastrado", 400)
+
     hashed_password = auth.get_password_hash(user.password)
-    
-    # Cria o novo usuário no DB
-    db_user = models.User(
-        username=user.username, 
+
+    new_user = models.User(
+        username=user.username,
         hashed_password=hashed_password,
         email=user.email,
         full_name=user.full_name,
-        is_admin=user.is_admin
+        # Flags internas NÃO podem vir do cliente:
+        is_admin=False,
+        is_superuser=False,
+        is_active=True,
+        is_verified=False,
     )
-    db.add(db_user)
-    db.commit()
-    db.refresh(db_user)
-    return db_user
 
-# --- Endpoint de Login (Autenticação)  ---
-@app.post("/auth", response_model=schemas.Token)
-def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-    # 1. Busca o usuário no DB
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+
+    logger.info("user_created", extra={"username": new_user.username})
+
+    return new_user
+
+
+# ============================================================
+#  ENDPOINT: LOGIN / TOKEN
+# ============================================================
+
+@app.post("/auth", response_model=schemas.Token, tags=["Autenticação"])
+def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+    """
+    Autenticação: retorna JWT seguro.
+    """
+
     user = db.query(models.User).filter(models.User.username == form_data.username).first()
 
-    # 2. Verifica se o usuário existe E se a senha está correta
     if not user or not auth.verify_password(form_data.password, user.hashed_password):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Usuário ou senha incorretos",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+        raise ServiceError("Credenciais inválidas", 401)
 
-    # 3. Cria o Token JWT
-    access_token = auth.create_access_token(
-        data={"sub": user.username} # "sub" (subject) é o padrão para o nome do usuário no JWT
+    token = create_access_token(
+        sub=user.username,
+        roles=["admin"] if user.is_admin else ["user"]
     )
-    
-    return {"access_token": access_token, "token_type": "bearer"}
 
-@app.get("/usuarios/me", response_model=schemas.User)
-def read_users_me(
-    current_user: models.User = Depends(auth.get_current_user)
-):
+    logger.info("login_success", extra={"username": user.username})
+
+    return {"access_token": token, "token_type": "bearer"}
+
+
+# ============================================================
+#  ENDPOINT: PERFIL DO USUÁRIO LOGADO
+# ============================================================
+
+@app.get(
+    "/usuarios/me",
+    response_model=schemas.User,
+    tags=["Usuários"]
+)
+def read_me(current_user: models.User = Depends(get_current_user)):
     """
-    Retorna os dados do usuário atualmente logado (identificado pelo token).
+    Retorna os dados públicos do usuário autenticado.
     """
-    # A dependência 'auth.get_current_user' faz todo o trabalho.
-    # Se o código chegar aqui, 'current_user' é o objeto User válido.
     return current_user
 
-@app.patch("/usuarios/me", response_model=schemas.User)
-def update_user_me(
-    user_update: schemas.UserUpdate,
+
+# ============================================================
+#  ENDPOINT: ATUALIZAÇÃO DO PRÓPRIO USUÁRIO
+# ============================================================
+
+@app.patch(
+    "/usuarios/me",
+    response_model=schemas.User,
+    tags=["Usuários"]
+)
+def update_me(
+    update: schemas.UserUpdate,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(auth.get_current_user)
+    current_user: models.User = Depends(get_current_user)
 ):
     """
-    Permite ao usuário logado atualizar seus próprios dados (completar cadastro).
+    Atualiza os dados do próprio usuário.
     """
-    
-    # Pega os dados do body (user_update) e converte para um dict
-    # 'exclude_unset=True' é a mágica do PATCH: ele só inclui campos
-    # que o usuário realmente enviou no JSON.
-    update_data = user_update.model_dump(exclude_unset=True)
 
-    # Risco de Segurança: Se o usuário está atualizando o e-mail,
-    # devemos verificar se o novo e-mail já está em uso.
-    if "email" in update_data:
-        email_exists = db.query(models.User).filter(
-            models.User.email == update_data["email"],
-            models.User.id != current_user.id  # Ignora o próprio usuário
-        ).first()
-        if email_exists:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Este e-mail já está em uso por outra conta."
-            )
+    data = update.model_dump(exclude_unset=True)
 
-    # Atualiza o objeto 'current_user' (que veio do DB)
-    # com os novos dados do 'update_data'
-    for key, value in update_data.items():
-        setattr(current_user, key, value)
+    if "email" in data:
+        exists = (
+            db.query(models.User)
+            .filter(models.User.email == data["email"], models.User.id != current_user.id)
+            .first()
+        )
+        if exists:
+            raise ServiceError("Este e-mail já está em uso", 400)
 
-    # Salva as mudanças no banco de dados
-    db.add(current_user)
+    for field, value in data.items():
+        setattr(current_user, field, value)
+
     db.commit()
     db.refresh(current_user)
-    
+
+    logger.info("user_updated", extra={"username": current_user.username})
+
     return current_user
 
-@app.get("/usuarios", response_model=List[schemas.User])
-def read_users(
+
+# ============================================================
+#  ENDPOINT: LISTA COMPLETA DE USUÁRIOS (ADMIN ONLY)
+# ============================================================
+
+@app.get(
+    "/usuarios",
+    response_model=List[schemas.UserAdmin],
+    tags=["Admin"]
+)
+def list_users(
     db: Session = Depends(get_db),
-    # A MÁGICA: Só passa se o token for de um admin
-    admin_user: models.User = Depends(auth.get_current_admin_user)
+    user=Depends(require_roles("admin"))
 ):
     """
-    Retorna uma lista de todos os usuários.
-    Acesso restrito a administradores (atendentes).
+    Lista todos os usuários, apenas para administradores.
     """
-    users = db.query(models.User).all()
-    return users
+    return db.query(models.User).all()

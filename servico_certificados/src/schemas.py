@@ -1,35 +1,101 @@
 # servico_certificados/src/schemas.py
-from pydantic import BaseModel, EmailStr
-from typing import Optional
+
 from datetime import datetime
+from pydantic import BaseModel, ConfigDict
+import uuid
 
-# --- Schema do Usuário (vindo do token) ---
-# Usado pelo security.py
-class User(BaseModel):
+
+# ============================================================
+#  SCHEMAS BASE
+# ============================================================
+
+class CertificadoBase(BaseModel):
+    """Campos principais comuns aos DTOs."""
+    codigo_unico: uuid.UUID
+    data_emissao: datetime
+
+
+# ============================================================
+#  ENTRADA — EMISSÃO MANUAL PELO ADMIN
+# ============================================================
+
+class CertificadoEmissaoManual(BaseModel):
+    """
+    Para:
+      - POST /admin/certificados/emissao
+    """
+    inscricao_id: int
+
+
+# ============================================================
+#  SAÍDA — CERTIFICADO COMPLETO (ADMIN)
+# ============================================================
+
+class CertificadoDetalhado(CertificadoBase):
+    """
+    Resposta completa:
+      - admin listagem
+      - consultas internas
+    """
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
-    username: str
-    email: Optional[EmailStr] = None
-    full_name: Optional[str] = None
-    is_admin: bool
-
-# --- Certificado ---
-class CertificadoCreate(BaseModel):
-    evento_id: int
-    # O usuario_id virá do token
-    
-    # Precisamos dos nomes para o certificado
-    nome_evento: str
-    # O nome do usuário virá do token (current_user.full_name)
-
-
-class Certificado(BaseModel):
-    id: int
+    inscricao_id: int
     usuario_id: int
     evento_id: int
-    codigo_autenticacao: str
-    data_emissao: datetime
-    nome_usuario: str
-    nome_evento: str
+    usuario_nome: str
+    usuario_email: str
+    evento_nome: str
+    evento_data: datetime | None
+    origem_automatica: bool
+    template_nome: str | None
+    assinatura_digital: str | None
 
-    class Config:
-        from_attributes = True
+
+# ============================================================
+#  SAÍDA — CERTIFICADO SIMPLES (EMISSÃO AUTOMÁTICA)
+# ============================================================
+
+class CertificadoSimples(CertificadoBase):
+    """
+    Usado em:
+      - emissão automática após check-in
+    """
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    inscricao_id: int
+    usuario_id: int
+    evento_id: int
+
+
+# ============================================================
+#  VALIDAÇÃO PÚBLICA DE CERTIFICADOS
+# ============================================================
+
+class CertificadoValidacaoResponse(BaseModel):
+    """
+    Resposta pública para:
+      GET /certificados/validar/{codigo}
+    """
+    valido: bool
+    evento: str | None = None
+    usuario: str | None = None
+    data_emissao: datetime | None = None
+
+
+# ============================================================
+#  LISTAGENS (ADMIN)
+# ============================================================
+
+class CertificadoListagem(BaseModel):
+    """
+    Retorno minimalista para listagens internas.
+    """
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    codigo_unico: uuid.UUID
+    usuario_nome: str
+    evento_nome: str
+    data_emissao: datetime

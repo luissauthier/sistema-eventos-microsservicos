@@ -40,7 +40,8 @@
     restart: unless-stopped
     env_file: ./.env
     volumes:
-      - ./servico_usuarios/src:/app # Hot-reload
+      - ./servico_usuarios/src:/app
+      - ./servico_comum:/app/servico_comum
     expose:
       - "8000" # Porta interna (Uvicorn)
     depends_on:
@@ -55,6 +56,7 @@
     env_file: ./.env
     volumes:
       - ./servico_eventos/src:/app
+      - ./servico_comum:/app/servico_comum
     expose:
       - "8000" # Porta interna
     depends_on:
@@ -68,6 +70,7 @@
     env_file: ./.env
     volumes:
       - ./servico_certificados/src:/app
+      - ./servico_comum:/app/servico_comum
     expose:
       - "8000" # Porta interna
     depends_on:
