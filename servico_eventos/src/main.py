@@ -121,36 +121,44 @@ def create_inscricao(
 @app.post("/presencas", response_model=schemas.Presenca, status_code=status.HTTP_201_CREATED)
 def register_presenca(
     presenca: schemas.PresencaCreate,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    # Risco de Segurança: Esta rota deveria ter um nível de permissão
-    # maior (ex: "atendente"), mas por enquanto, qualquer usuário logado pode usar.
-    current_user: security.User = Depends(security.get_current_user)
+    current_admin: security.User = Depends(security.get_current_admin_user)
 ):
     """
-    [cite_start]Registra uma presença (check-in). [cite: 48]
+    Registra uma presença (check-in) para uma inscrição.
+    Esta rota é PROTEGIDA e restrita a Atendentes (Admins).
     """
-    # 1. Encontra a inscrição
-    inscricao = db.query(models.Inscricao).filter(models.Inscricao.id == presenca.inscricao_id).first()
-    if not inscricao:
+    
+    # 1. Encontra a inscrição que está fazendo check-in
+    db_inscricao = db.query(models.Inscricao).filter(
+        models.Inscricao.id == presenca.inscricao_id
+    ).first()
+
+    if db_inscricao is None:
         raise HTTPException(status_code=404, detail="Inscrição não encontrada")
-        
-    # 2. Verifica se a presença já foi registrada
-    presenca_existente = db.query(models.Presenca).filter(models.Presenca.inscricao_id == inscricao.id).first()
-    if presenca_existente:
-        raise HTTPException(status_code=400, detail="Check-in já realizado para esta inscrição")
+
+    # 2. Verifica se o check-in já foi feito
+    db_presenca_existente = db.query(models.Presenca).filter(
+        models.Presenca.inscricao_id == presenca.inscricao_id
+    ).first()
+    
+    if db_presenca_existente:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Check-in já realizado para esta inscrição"
+        )
 
     # 3. Registra a presença
     db_presenca = models.Presenca(
-        inscricao_id=inscricao.id,
-        usuario_id=inscricao.usuario_id,
-        evento_id=inscricao.evento_id
+        inscricao_id=db_inscricao.id,
+        usuario_id=db_inscricao.usuario_id,
+        evento_id=db_inscricao.evento_id
     )
+    
     db.add(db_presenca)
     db.commit()
     db.refresh(db_presenca)
-
-    # Precisamos dos dados do usuário que fez o check-in, não do atendente (current_user)
-    # TODO: Buscar o e-mail/nome do 'db_inscricao.usuario_id'
     
     payload = {
         "tipo": "checkin",
@@ -158,9 +166,8 @@ def register_presenca(
         "nome": "Nome do Participante", # TODO: Buscar nome
         "nome_evento": "Nome do Evento" # TODO: Buscar nome
     }
-    # Por enquanto, vamos notificar o atendente (current_user) como placeholder
-    payload["destinatario"] = current_user.email
-    payload["nome"] = current_user.full_name or current_user.username
+    payload["destinatario"] = current_admin.email
+    payload["nome"] = current_admin.full_name or current_admin.username
     
     asyncio.create_task(send_notification(payload))
 
@@ -253,63 +260,6 @@ def read_inscricao(
     # 4. Tudo certo, retorna a inscrição
     return db_inscricao
 
-@app.post("/presencas", response_model=schemas.Presenca, status_code=status.HTTP_201_CREATED)
-def register_presenca(
-    presenca: schemas.PresencaCreate,
-    background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db),
-    # TODO: Proteger esta rota para ser acessível apenas por "atendentes".
-    # Por enquanto, qualquer usuário logado pode registrar uma presença.
-    current_user: security.User = Depends(security.get_current_user)
-):
-    """
-    Registra uma presença (check-in) para uma inscrição.
-    Esta rota é PROTEGIDA.
-    """
-    
-    # 1. Encontra a inscrição que está fazendo check-in
-    db_inscricao = db.query(models.Inscricao).filter(
-        models.Inscricao.id == presenca.inscricao_id
-    ).first()
-
-    if db_inscricao is None:
-        raise HTTPException(status_code=404, detail="Inscrição não encontrada")
-
-    # 2. Verifica se o check-in já foi feito para esta inscrição
-    db_presenca_existente = db.query(models.Presenca).filter(
-        models.Presenca.inscricao_id == presenca.inscricao_id
-    ).first()
-    
-    if db_presenca_existente:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Check-in já realizado para esta inscrição"
-        )
-
-    # 3. Tudo certo, registra a presença
-    db_presenca = models.Presenca(
-        inscricao_id=db_inscricao.id,
-        usuario_id=db_inscricao.usuario_id,
-        evento_id=db_inscricao.evento_id
-    )
-    
-    db.add(db_presenca)
-    db.commit()
-    db.refresh(db_presenca)
-
-    payload = {
-        "tipo": "checkin",
-        "destinatario": current_user.email,
-        # ...
-    }
-    # Substitua 'asyncio.create_task' por isto:
-    background_tasks.add_task(send_notification, payload)
-    
-    # TODO: Disparar e-mail de "comparecimento (checkin)" (Sprint 3)
-    # (chamar o servico_notificacoes)
-
-    return db_presenca
-
 @app.get("/inscricoes/me", response_model=List[schemas.InscricaoComDetalhes])
 def read_minhas_inscricoes(
     db: Session = Depends(get_db),
@@ -346,7 +296,7 @@ def read_minhas_presencas(
     
     return presencas
 
-@app.get("/inscricoes/all", response_model=List[schemas.InscricaoComDetalhes])
+@app.get("/inscricoes/all", response_model=List[schemas.Inscricao]) # <-- MUDANÇA 1: Mude para 'Inscricao'
 def read_all_inscricoes(
     db: Session = Depends(get_db),
     admin_user: security.User = Depends(security.get_current_admin_user)
@@ -355,8 +305,62 @@ def read_all_inscricoes(
     Consulta TODAS as inscrições de todos os usuários.
     Acesso restrito a administradores (atendentes).
     """
+    
     inscricoes = db.query(models.Inscricao).options(
-        joinedload(models.Inscricao.evento)
+        joinedload(models.Inscricao.evento),
+        joinedload(models.Inscricao.usuario)
     ).all()
     
     return inscricoes
+
+@app.post("/admin/inscricoes", response_model=schemas.Inscricao, status_code=status.HTTP_201_CREATED, tags=["Admin"])
+def admin_create_inscricao(
+    inscricao: schemas.AdminInscricaoCreate, # Novo DTO necessário
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_admin: security.User = Depends(security.get_current_admin_user),
+):
+    """
+    (Admin) Registra uma inscrição para um usuário específico.
+    Usado pelo App Local (offline) para sincronização.
+    """
+    
+    # 1. Verifica se o evento existe
+    evento = db.query(models.Evento).filter(models.Evento.id == inscricao.evento_id).first()
+    if not evento:
+        raise HTTPException(status_code=404, detail="Evento não encontrado")
+
+    # 2. Verifica se o usuário existe
+    usuario = db.query(models.User).filter(models.User.id == inscricao.usuario_id).first()
+    if not usuario:
+        raise HTTPException(status_code=404, detail="Usuário alvo não encontrado")
+        
+    # 3. Verifica se a inscrição já existe (Idempotência)
+    inscricao_existente = db.query(models.Inscricao).filter(
+        models.Inscricao.evento_id == inscricao.evento_id,
+        models.Inscricao.usuario_id == inscricao.usuario_id
+    ).first()
+    
+    if inscricao_existente:
+        return inscricao_existente
+
+    # 4. Cria a inscrição para o usuário-alvo
+    db_inscricao = models.Inscricao(
+        evento_id=inscricao.evento_id,
+        usuario_id=usuario.id,
+        usuario_username=usuario.username
+    )
+    db.add(db_inscricao)
+    db.commit()
+    db.refresh(db_inscricao)
+    
+    # (Notificação para o usuário-alvo, não para o admin)
+    payload = {
+        "tipo": "inscricao",
+        "destinatario": usuario.email,
+        "nome": usuario.full_name or usuario.username,
+        "nome_evento": evento.nome
+    }
+    background_tasks.add_task(send_notification, payload)
+    
+    return db_inscricao

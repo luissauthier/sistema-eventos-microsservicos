@@ -48,3 +48,6 @@ class Presenca(BaseModel):
 
 class InscricaoComDetalhes(Inscricao):
     evento: Evento 
+class AdminInscricaoCreate(BaseModel):
+    evento_id: int
+    usuario_id: int

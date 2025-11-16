@@ -289,52 +289,30 @@ ipcMain.handle('sincronizar-upload', async () => {
       WHERE i.sincronizado = 0 AND u.server_id IS NOT NULL
     `);
     
-    for (const insc of inscricoes) {
-      // O backend mudou para esperar 'usuario_id' no 'POST /inscricoes'
-      // Mas o nosso `get_current_user` já faz isso! A chamada deve ser mais simples.
-      // Vamos assumir que o `servico_eventos` usa o `usuario_id` do token.
-      // Ah, não, o atendente está a inscrever o *utilizador local*.
-      // O `app-local/src/main.js` [cite] está a enviar o ID do servidor do utilizador...
-      // Mas a API `POST /inscricoes` não aceita `usuario_id`!
-      
-      // --- CORREÇÃO DE LÓGICA DE API ---
-      // A API `POST /inscricoes` usa o `current_user` (o atendente).
-      // Ela precisa de um `POST /inscricoes/admin` que aceite um `usuario_id`.
-      
-      // VAMOS USAR UMA SOLUÇÃO TEMPORÁRIA: O `app-local` vai "fingir" ser o utilizador.
-      // (Isto não é ideal, mas funciona sem mais alterações de backend)
-      
-      // 1. Fazer login como o *novo utilizador*
-      const params = new URLSearchParams();
-      params.append('username', (await dbRunGet("SELECT email FROM usuarios WHERE server_id = ?", [insc.usuario_server_id])).email);
-      params.append('password', (await dbRunGet("SELECT senha FROM usuarios WHERE server_id = ?", [insc.usuario_server_id])).senha);
-      const loginNovoUser = await axios.post(`${API_URL}/auth`, params);
-      const tokenNovoUser = loginNovoUser.data.access_token;
-      
-      // 2. Fazer a inscrição COMO o novo utilizador
-      const apiResponse = await axios.post(`${API_URL}/inscricoes`, {
+    for (const insc of inscricoes) {   
+      const apiResponse = await axios.post(`${API_URL}/admin/inscricoes`, {
         evento_id: insc.evento_id_server,
-        nome_evento: (await dbRunGet("SELECT nome FROM eventos WHERE id_server = ?", [insc.evento_id_server])).nome
-      }, { headers: { 'Authorization': `Bearer ${tokenNovoUser}` }});
+        usuario_id: insc.usuario_server_id // Passa o ID do usuário-alvo
+      }, { headers });
       
-      // 3. Atualizar localmente
       await dbRun(`UPDATE inscricoes SET sincronizado = 1, server_id = ? WHERE id_local = ?`,
         [apiResponse.data.id, insc.id_local]);
       subsSynced++;
     }
 
-    // 3. Sincronizar PRESENÇAS (Item 16)
     const presencas = await dbRunAll(`
-      SELECT p.id_local, i.server_id as inscricao_server_id
-      FROM presencas p
-      JOIN inscricoes i ON p.inscricao_id_local = i.id_local
-      WHERE p.sincronizado = 0 AND i.server_id IS NOT NULL
+        SELECT p.id_local, i.server_id as inscricao_server_id
+        FROM presencas p
+        JOIN inscricoes i ON p.inscricao_id_local = i.id_local
+        WHERE p.sincronizado = 0 AND i.server_id IS NOT NULL
     `);
     
     for (const pres of presencas) {
+      // Esta chamada já estava correta. 
+      // O atendente (admin) registra a presença.
       await axios.post(`${API_URL}/presencas`, {
         inscricao_id: pres.inscricao_server_id
-      }, { headers }); // Usa o token do ATENDENTE (correto)
+      }, { headers }); 
       
       await dbRun(`UPDATE presencas SET sincronizado = 1 WHERE id_local = ?`, [pres.id_local]);
       checksSynced++;
