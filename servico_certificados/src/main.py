@@ -72,7 +72,7 @@ def emitir_certificado_manual(
 
     async def obter_dados_inscricao():
         async with AsyncClient() as cli:
-            r = await cli.get(f"http://servico_eventos:8001/inscricoes/{data.inscricao_id}")
+            r = await cli.get(f"http://servico_eventos:8000/inscricoes/{data.inscricao_id}")
             if r.status_code == 404:
                 raise ServiceError("Inscrição não encontrada no serviço de eventos", 404)
             r.raise_for_status()
@@ -97,7 +97,8 @@ def emitir_certificado_manual(
         usuario_email=insc["evento"]["responsavel_email"] if "responsavel_email" in insc else "<desconhecido>",
         evento_nome=insc["evento"]["nome"],
         evento_data=insc["evento"]["data_evento"],
-        origem_automatica=False
+        origem_automatica=False,
+        template_certificado=insc["evento"].get("template_certificado", "default")
     )
 
     db.add(cert)
@@ -133,6 +134,8 @@ def emitir_certificado_automatico(payload: dict, db: Session = Depends(get_db)):
     evento_nome = payload["evento_nome"]
     evento_data = payload["evento_data"]
 
+    template_certificado = payload.get("template_certificado", "default")
+
     # Idempotência
     existente = db.query(models.Certificado).filter_by(
         inscricao_id=inscricao_id
@@ -149,7 +152,8 @@ def emitir_certificado_automatico(payload: dict, db: Session = Depends(get_db)):
         usuario_email=usuario_email,
         evento_nome=evento_nome,
         evento_data=evento_data,
-        origem_automatica=True
+        origem_automatica=True,
+        template_certificado=template_certificado
     )
 
     db.add(cert)
@@ -180,7 +184,8 @@ def validar_certificado(codigo: str, db: Session = Depends(get_db)):
         valido=True,
         evento=cert.evento_nome,
         usuario=cert.usuario_nome,
-        data_emissao=cert.data_emissao
+        data_emissao=cert.data_emissao,
+        template_certificado=cert.template_certificado
     )
 
 
@@ -191,7 +196,7 @@ def validar_certificado(codigo: str, db: Session = Depends(get_db)):
 @app.get(
     "/certificados/me",
     tags=["Usuário"],
-    response_model=List[schemas.CertificadoSimples]
+    response_model=List[schemas.CertificadoDetalhado]
 )
 def meus_certificados(
     db: Session = Depends(get_db),
@@ -218,3 +223,5 @@ def listar_certificados(
     return db.query(models.Certificado).order_by(
         models.Certificado.data_emissao.desc()
     ).all()
+
+

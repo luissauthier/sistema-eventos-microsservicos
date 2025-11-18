@@ -28,6 +28,9 @@ class User(Base):
     # ---------------------------
     full_name = Column(String(100), index=True, nullable=True)
     email = Column(String(120), unique=True, index=True, nullable=True)
+    cpf = Column(String(14), unique=True, index=True, nullable=True)
+    telefone = Column(String(20), nullable=True)
+    endereco = Column(String(255), nullable=True)
 
     # ---------------------------
     # Flags de Permissão

@@ -8,6 +8,7 @@ from typing import List
 from datetime import datetime, timedelta
 import httpx
 import asyncio
+from schemas import CheckinTokenResponse
 
 # Infraestrutura corporativa
 from servico_comum.logger import configure_logger
@@ -45,6 +46,63 @@ app.add_middleware(RequestIDMiddleware)
 app.add_exception_handler(ServiceError, service_error_handler)
 app.add_exception_handler(Exception, service_error_handler)
 
+# ============================================================
+#  FUNÇÃO AUXILIAR: EMITIR CERTIFICADO E NOTIFICAR
+# ============================================================
+
+async def solicitar_emissao_certificado_e_notificacao(insc: models.Inscricao, user: User, evento: models.Evento):
+    """
+    Encapsula a lógica de chamada HTTP para Certificados e Notificações,
+    garantindo que não usamos o db.query aqui (melhor para async).
+    """
+    
+    # 1. Disparar Certificado (Lógica da rota Admin, mas encapsulada)
+    # Assumindo que a função get_user_by_id está implementada (Etapa 2.1)
+    async with httpx.AsyncClient(timeout=3) as client:
+        try:
+            # Buscar dados frescos do usuário
+            resp_user = await client.get(f"http://servico_usuarios:8000/usuarios/{insc.usuario_id}")
+            resp_user.raise_for_status()
+            dados_usuario = resp_user.json()
+            user_email = dados_usuario.get("email") or "email_nao_informado@evento.com"
+
+            # Dados do Evento
+            nome_evento = evento.nome
+            data_evento = str(evento.data_evento)
+            tpl_certificado = getattr(evento, "template_certificado", "default")
+            
+            payload_cert = {
+                "inscricao_id": insc.id,
+                "usuario_id": insc.usuario_id,
+                "evento_id": insc.evento_id,
+                "usuario_nome": insc.usuario_username,
+                "usuario_email": user_email,
+                "evento_nome": nome_evento,
+                "evento_data": data_evento,
+                "template_certificado": tpl_certificado 
+            }
+
+            # Chamada ao Microsserviço de Certificados
+            resp_cert = await client.post(
+                "http://servico_certificados:8000/interno/certificados/emitir_automatico",
+                json=payload_cert
+            )
+            resp_cert.raise_for_status()
+            logger.info("certificado_emitido_qr_code", extra={"inscricao_id": insc.id})
+            
+            # 2. Notificação de Check-in
+            payload_notif = {
+                "tipo": "checkin",
+                "destinatario": user_email,
+                "nome": user.full_name or user.username,
+                "nome_evento": evento.nome
+            }
+            # Reutiliza a função garantida (com retry)
+            await send_notification_guaranteed(payload_notif)
+
+
+        except Exception as e:
+            logger.error("falha_fluxo_qr_code", extra={"erro": str(e), "inscricao": insc.id})
 
 # ============================================================
 #  FUNÇÃO DE NOTIFICAÇÕES (GARANTIDA - 3 RETENTATIVAS)
@@ -117,7 +175,8 @@ def create_evento(
     evento = models.Evento(
         nome=data.nome,
         descricao=data.descricao,
-        data_evento=data.data_evento
+        data_evento=data.data_evento,
+        template_certificado=data.template_certificado
     )
     db.add(evento)
     db.commit()
@@ -400,24 +459,66 @@ def registrar_presenca(
         origem=body.origem
     )
 
+    cert_existente = db.query(models.Certificado).filter_by(inscricao_id=insc.id).first()
+    if cert_existente:
+        cert_existente.origem_automatica = True
+
     db.add(presenca)
     db.commit()
     db.refresh(presenca)
 
     # EMISSÃO AUTOMÁTICA DE CERTIFICADO
-    cert_existente = db.query(models.Certificado).filter_by(inscricao_id=insc.id).first()
-    if not cert_existente:
-        cert = models.Certificado(
-            inscricao_id=insc.id,
-            evento_id=insc.evento_id,
-            codigo_unico=models.generate_cert_hash()
-        )
-        db.add(cert)
-        db.commit()
+    async def solicitar_emissao_certificado():
+        timeout_config = httpx.Timeout(5.0, connect=2.0)
+        async with httpx.AsyncClient(timeout=timeout_config) as client:
+            try:
+                # A) Buscar dados frescos do usuário (Email é obrigatório para o certificado)
+                # URL interna do docker-compose
+                resp_user = await client.get(f"http://servico_usuarios:8000/usuarios/{insc.usuario_id}")
+                resp_user.raise_for_status()
+                dados_usuario = resp_user.json()
+                user_email = dados_usuario.get("email", "email_nao_informado@evento.com")
 
+                # B) Carregar dados do evento (Template)
+                # Como 'insc.evento' pode ser lazy load, garantimos o acesso ou query
+                # Aqui acessamos via relação do SQLAlchemy (assumindo joinedload ou acesso direto)
+                nome_evento = insc.evento.nome
+                data_evento = str(insc.evento.data_evento)
+                # --- USO DO NOVO CAMPO DA ETAPA 2 ---
+                tpl_certificado = getattr(insc.evento, "template_certificado", "default")
+
+                # C) Payload para o Serviço de Certificados
+                payload = {
+                    "inscricao_id": insc.id,
+                    "usuario_id": insc.usuario_id,
+                    "evento_id": insc.evento_id,
+                    "usuario_nome": insc.usuario_username,
+                    "usuario_email": user_email,
+                    "evento_nome": nome_evento,
+                    "evento_data": data_evento,
+                    "template_certificado": tpl_certificado 
+                }
+
+                # D) Chamada ao Microsserviço de Certificados
+                resp_cert = await client.post(
+                    "http://servico_certificados:8000/interno/certificados/emitir_automatico",
+                    json=payload
+                )
+                resp_cert.raise_for_status()
+                logger.info("certificado_emitido_sucesso", extra={"inscricao_id": insc.id})
+                
+            except Exception as e:
+                # Resiliência: Check-in não falha se certificado falhar (Tenta depois ou loga erro)
+                logger.error("falha_integracao_certificado", extra={"erro": str(e), "inscricao": insc.id})
+
+    # Execução síncrona da tarefa assíncrona (para garantir que foi solicitado)
+    # Em produção pesada, usaríamos fila (RabbitMQ/Redis), mas aqui asyncio.run atende.
+    asyncio.run(solicitar_emissao_certificado())
+
+    # 4. Notificação
     background.add_task(send_notification_guaranteed, {
         "tipo": "checkin",
-        "destinatario": None,  # carregamos se necessário
+        "destinatario": None, # O serviço de notificação vai tentar enviar se tiver destinatario, mas aqui deixamos None pois o foco é o registro
         "nome_evento": insc.evento.nome
     })
 
@@ -511,3 +612,165 @@ def sync_presencas_offline(
         "sincronizadas": len(results),
         "ids": results
     })
+
+# ============================================================
+#        USUÁRIO – CONSUMO DE TOKEN QR CODE (CHECK-IN RÁPIDO)
+# ============================================================
+
+@app.post(
+    "/checkin-qr/{token_uuid}",
+    response_model=schemas.CheckinQRCodeResult,
+    tags=["Check-in"]
+)
+def consume_checkin_qr(
+    token_uuid: str,
+    background: BackgroundTasks,
+    db: Session = Depends(get_db),
+    # Esta rota exige que o usuário esteja logado no Portal Web!
+    user: User = Depends(get_current_user) 
+):
+    # 1. Buscar e Validar Token
+    token_obj = db.query(models.CheckinToken).filter_by(token=token_uuid).first()
+
+    if not token_obj or not token_obj.is_active or token_obj.data_expiracao < datetime.utcnow():
+        raise ServiceError("Token de check-in inválido ou expirado.", 400)
+
+    evento_id = token_obj.evento_id
+    
+    # 2. Verificar/Criar Inscrição (Inscrição Rápida)
+    insc = db.query(models.Inscricao).filter_by(
+        usuario_id=user.id,
+        evento_id=evento_id
+    ).first()
+
+    is_new_inscricao = False
+    
+    if not insc:
+        # Se não está inscrito, inscreve automaticamente (Inscrição Rápida!)
+        evento = db.query(models.Evento).filter_by(id=evento_id).first()
+        if not evento:
+             raise ServiceError("Evento do token não encontrado", 404)
+        
+        insc = models.Inscricao(
+            evento_id=evento_id,
+            usuario_id=user.id,
+            usuario_username=user.username,
+            status=models.InscricaoStatus.ATIVA
+        )
+        db.add(insc)
+        db.commit()
+        db.refresh(insc)
+        is_new_inscricao = True
+
+        # Dispara notificação de inscrição (background)
+        background.add_task(send_notification_guaranteed, {
+            "tipo": "inscricao",
+            "destinatario": user.email,
+            "nome": user.full_name or user.username,
+            "nome_evento": evento.nome
+        })
+    elif insc.status == models.InscricaoStatus.CANCELADA:
+        # Se a inscrição estava cancelada, reativa (Comportamento de idempotência)
+        insc.status = models.InscricaoStatus.ATIVA
+        db.commit()
+
+
+    # 3. Registrar Presença (Check-in)
+    existente = db.query(models.Presenca).filter_by(inscricao_id=insc.id).first()
+    
+    if existente:
+        db.query(models.CheckinToken).filter_by(token=token_uuid).update({"is_active": False})
+        db.commit()
+        return schemas.CheckinQRCodeResult(
+            message="Check-in já estava registrado.",
+            inscricao_id=insc.id,
+            presenca_registrada=True
+        )
+
+    presenca = models.Presenca(
+        inscricao_id=insc.id,
+        usuario_id=insc.usuario_id,
+        evento_id=insc.evento_id,
+        origem=models.PresencaOrigem.QR_CODE
+    )
+
+    db.add(presenca)
+    
+    # 4. Invalidação do Token e Commit
+    db.query(models.CheckinToken).filter_by(token=token_uuid).update({"is_active": False})
+    db.commit()
+    db.refresh(presenca)
+    
+    # 5. Disparar Certificado e Notificação de Presença (Background)
+    # Reutilizamos a lógica de emissão de certificado e notificação de check-in (como no admin)
+    
+    # Busca o evento para pegar dados para notificação/certificado se for uma inscrição nova
+    evento = db.query(models.Evento).filter_by(id=evento_id).first()
+    
+    # Dispara a emissão de certificado e notificação de check-in
+    background.add_task(solicitar_emissao_certificado_e_notificacao, insc, user, evento)
+
+
+    return schemas.CheckinQRCodeResult(
+        message=f"Inscrição {'e ' if is_new_inscricao else ''} check-in registrados com sucesso!",
+        inscricao_id=insc.id,
+        presenca_registrada=True
+    )
+
+# ============================================================
+#        ADMIN – GERAÇÃO DE TOKEN QR CODE (CHECK-IN)
+# ============================================================
+
+@app.post(
+    "/admin/checkin/generate", 
+    response_model=schemas.CheckinTokenResponse, 
+    status_code=status.HTTP_201_CREATED,
+    tags=["admin"]
+)
+def generate_checkin_token(
+    data: schemas.CheckinTokenCreate, 
+    db: Session = Depends(get_db),
+    admin_user: User = Depends(get_current_admin_user)
+):
+    """
+    Gera um token de uso único e tempo limitado para check-in por QR Code.
+    """
+    evento_id = data.evento_id
+    duracao_minutos = data.duracao_minutos
+
+    # 1. Verificar se o evento existe
+    evento = db.query(models.Evento).filter(models.Evento.id == evento_id).first()
+    if not evento:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Evento não encontrado."
+        )
+
+    # 2. Definir expiração: Usando a duração enviada no body
+    expiration = datetime.utcnow() + timedelta(minutes=duracao_minutos)
+    
+    # 3. Criar o novo token
+    new_token = models.CheckinToken(
+        evento_id=evento_id,
+        data_expiracao=expiration,
+        is_active=True
+    )
+    
+    # 4. Salvar no banco de dados
+    db.add(new_token)
+    db.commit()
+    db.refresh(new_token)
+
+    public_url = f"http://localhost/checkin-qr/{new_token.token}"
+    
+    return schemas.CheckinTokenResponse(
+    # Assumimos que o schema de resposta tem estes nomes, 
+    # se não, ajuste os nomes das chaves (ex: evento_id -> event_id)
+    token=new_token.token,
+    evento_id=new_token.evento_id, 
+    data_expiracao=new_token.data_expiracao, 
+    is_active=new_token.is_active,
+    
+    # ESTE CAMPO ESTAVA FALTANDO!
+    url_publica=public_url 
+    )

@@ -50,6 +50,8 @@ class Certificado(Base):
     evento_nome = Column(String, nullable=False)
     evento_data = Column(DateTime(timezone=True), nullable=True)
 
+    template_certificado = Column(String(50), default="default", nullable=False)
+
     # (futuro) nome do template, assinatura digital, QR code
     template_nome = Column(String, nullable=True)
     assinatura_digital = Column(String, nullable=True)

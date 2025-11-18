@@ -1,6 +1,7 @@
 # servico_certificados/src/schemas.py
 
 from datetime import datetime
+from typing import Optional
 from pydantic import BaseModel, ConfigDict
 import uuid
 
@@ -48,6 +49,7 @@ class CertificadoDetalhado(CertificadoBase):
     evento_nome: str
     evento_data: datetime | None
     origem_automatica: bool
+    template_certificado: str
     template_nome: str | None
     assinatura_digital: str | None
 
@@ -67,6 +69,7 @@ class CertificadoSimples(CertificadoBase):
     inscricao_id: int
     usuario_id: int
     evento_id: int
+    template_certificado: str
 
 
 # ============================================================
@@ -82,6 +85,7 @@ class CertificadoValidacaoResponse(BaseModel):
     evento: str | None = None
     usuario: str | None = None
     data_emissao: datetime | None = None
+    template_certificado: Optional[str] = "default"
 
 
 # ============================================================

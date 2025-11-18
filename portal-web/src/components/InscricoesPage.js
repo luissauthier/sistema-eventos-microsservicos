@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { CheckCircle, Clock, X, Award, AlertTriangle } from 'lucide-react'; // Adicionei AlertTriangle
 import { buttonHoverTap } from '../App';
 import api from '../api';
+import CertificateModal from './CertificateModal';
 
 // Animações
 const containerVariants = {
@@ -19,6 +20,8 @@ function InscricoesPage() {
   const [inscricoes, setInscricoes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [showModal, setShowModal] = useState(false);
+  const [currentCert, setCurrentCert] = useState(null);
 
   // Função para buscar os dados da API (substitui 'fetchData')
   const carregarInscricoes = async () => {
@@ -81,6 +84,27 @@ function InscricoesPage() {
       alert('Erro ao emitir. (Você precisa ter o check-in confirmado!)');
     }
     */
+  };
+
+  const handleVerCertificado = async (inscricao) => {
+    try {
+      // 1. Busca todos os certificados do usuário
+      const response = await api.get('/certificados/me');
+      const meusCertificados = response.data;
+
+      // 2. Tenta encontrar o certificado deste evento
+      const cert = meusCertificados.find(c => c.evento_id === inscricao.evento_id);
+
+      if (cert) {
+        setCurrentCert(cert);
+        setShowModal(true);
+      } else {
+        alert("Certificado ainda não gerado pelo sistema. Se você já fez check-in, aguarde alguns minutos.");
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Erro ao buscar certificado.');
+    }
   };
   
 
@@ -148,10 +172,10 @@ function InscricoesPage() {
                 {hasCheckin && (
                    <motion.button 
                     className="btn-certificado"
-                    onClick={() => handleEmitirCertificado(inscricao)}
+                    onClick={() => handleVerCertificado(inscricao)}
                     {...buttonHoverTap}
                   >
-                    <Award size={14} /> Emitir Certificado
+                    <Award size={14} /> Ver Certificado
                   </motion.button>
                 )}
 
@@ -161,6 +185,13 @@ function InscricoesPage() {
             </motion.div>
           );
         })
+      )}
+
+      {showModal && (
+        <CertificateModal 
+          certificado={currentCert} 
+          onClose={() => setShowModal(false)} 
+        />
       )}
     </motion.div>
   );

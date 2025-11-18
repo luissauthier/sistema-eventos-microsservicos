@@ -12,6 +12,8 @@ const CriarEventoPage = ({ setPagina, eventoEditando }) => {
     data_evento: ''
   });
 
+  const [template, setTemplate] = useState('default');
+
   // Preenche o formulário se estiver editando
   useEffect(() => {
     if (eventoEditando) {
@@ -47,14 +49,16 @@ const CriarEventoPage = ({ setPagina, eventoEditando }) => {
         await api.patch(`/admin/eventos/${eventoEditando.id}`, {
           nome: formData.nome,
           descricao: formData.descricao,
-          data_evento: formData.data_evento
+          data_evento: formData.data_evento,
+          template_certificado: template
         });
         alert('Evento atualizado com sucesso!');
       } else {
         await api.post('/admin/eventos', {
           nome: formData.nome,
           descricao: formData.descricao,
-          data_evento: formData.data_evento
+          data_evento: formData.data_evento,
+          template_certificado: template
         });
         alert('Evento criado com sucesso!');
       }
@@ -169,6 +173,21 @@ const CriarEventoPage = ({ setPagina, eventoEditando }) => {
                     placeholder="Detalhes sobre o local, palestrantes, tópicos abordados..."
                   />
                 </div>
+              </div>
+
+              {/* Seletor de Template Visual */}
+              <div className="form-group">
+                <label>Estilo do Certificado</label>
+                <select 
+                  value={template} 
+                  onChange={e => setTemplate(e.target.value)}
+                  style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid #ddd' }}
+                >
+                  <option value="default">Clássico (Azul/Univates)</option>
+                  <option value="dark">Dark Mode (Tecnologia)</option>
+                  <option value="minimal">Minimalista (P&B)</option>
+                </select>
+                <small style={{color: '#666'}}>Isso definirá o visual do certificado para todos os participantes.</small>
               </div>
 
               {/* Botão Salvar */}

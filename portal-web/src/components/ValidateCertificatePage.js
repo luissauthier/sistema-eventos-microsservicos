@@ -6,13 +6,13 @@ import api from '../api'; // Usamos o api, pois não precisa de token
 function ValidateCertificatePage({ setPagina }) {
   const [codigo, setCodigo] = useState('');
   const [error, setError] = useState('');
-  const [certificado, setCertificado] = useState(null); // Armazena o resultado
+  const [validatedData, setValidatedData] = useState(null);
   const [loading, setLoading] = useState(false);
 
   const handleValidate = async (e) => {
     e.preventDefault();
     setError('');
-    setCertificado(null);
+    setValidatedData(null);
     setLoading(true);
 
     if (!codigo) {
@@ -22,17 +22,29 @@ function ValidateCertificatePage({ setPagina }) {
     }
 
     try {
-      // Usamos o 'api' para a chamada pública
       const response = await api.get(`/certificados/validar/${codigo}`);
-      setCertificado(response.data); // Guarda o certificado encontrado
+      
+      // --- CORREÇÃO CRÍTICA DE LÓGICA DE NEGÓCIO ---
+      if (response.data.valido) {
+          // Se for válido, armazena o objeto completo para exibição
+          setValidatedData(response.data); 
+      } else {
+          // Se a API retornou 200, mas o certificado não existe/é inválido
+          setError('Certificado não encontrado ou inválido. Verifique o código.');
+          setValidatedData(null);
+      }
+
     } catch (err) {
-      setError('Certificado não encontrado ou inválido.');
-      setCertificado(null); // Limpa resultados antigos
+      // Captura erros de rede (404, 500, etc.)
+      setError('Falha na comunicação com o serviço de validação. Tente novamente.');
+      setValidatedData(null);
       console.error(err);
     } finally {
       setLoading(false);
     }
   };
+
+  const isCertificadoValido = validatedData && validatedData.valido;
   
   return (
     <div className="form-container" style={{ maxWidth: '600px' }}>
@@ -70,8 +82,8 @@ function ValidateCertificatePage({ setPagina }) {
 
       {/* --- Exibição do Resultado --- */}
       {error && <p className="form-error">{error}</p>}
-
-      {certificado && (
+      
+      {isCertificadoValido && (
         <motion.div 
           className="card-inscricao" 
           style={{ marginTop: '2rem', borderColor: 'var(--green)' }}
@@ -79,10 +91,17 @@ function ValidateCertificatePage({ setPagina }) {
           animate={{ opacity: 1, y: 0 }}
         >
           <h3 style={{ color: 'var(--green)' }}>Certificado Válido</h3>
-          <p><strong>Participante:</strong> {certificado.nome_usuario}</p>
-          <p><strong>Evento:</strong> {certificado.nome_evento}</p>
-          <p><strong>Emitido em:</strong> {new Date(certificado.data_emissao).toLocaleDateString()}</p>
-          <p><strong>Código:</strong> {certificado.codigo_autenticacao}</p>
+          
+          {/* --- CORREÇÃO DOS NOMES DE CAMPO DO BACKEND --- */}
+          <p><strong>Participante:</strong> {validatedData.usuario}</p> 
+          <p><strong>Evento:</strong> {validatedData.evento}</p>
+          {/* ----------------------------------------------- */}
+
+          <p><strong>Emitido em:</strong> {new Date(validatedData.data_emissao).toLocaleDateString()}</p>
+          {/* O código de validação é o que o usuário inseriu */}
+          <p><strong>Código:</strong> {codigo}</p> 
+          <p><strong>Template:</strong> {validatedData.template_certificado}</p> 
+
         </motion.div>
       )}
     </div>

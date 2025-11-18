@@ -87,6 +87,11 @@ def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
     exists = db.query(models.User).filter(models.User.username == user.username).first()
     if exists:
         raise ServiceError("Usuário já cadastrado", 400)
+    
+    if user.cpf:
+        exists_cpf = db.query(models.User).filter(models.User.cpf == user.cpf).first()
+        if exists_cpf:
+            raise ServiceError("CPF já cadastrado", 400)
 
     hashed_password = auth.get_password_hash(user.password)
 
@@ -95,6 +100,9 @@ def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
         hashed_password=hashed_password,
         email=user.email,
         full_name=user.full_name,
+        cpf=user.cpf,
+        telefone=user.telefone,
+        endereco=user.endereco,
         # Flags internas NÃO podem vir do cliente:
         is_admin=False,
         is_superuser=False,
@@ -209,3 +217,41 @@ def list_users(
     Lista todos os usuários, apenas para administradores.
     """
     return db.query(models.User).all()
+
+
+@app.get(
+    "/usuarios/{id}",
+    response_model=schemas.UserAdmin,
+    tags=["Admin", "Interno"]
+)
+def get_user_by_id(
+    id: int,
+    db: Session = Depends(get_db),
+    # Para simplificar em ambiente dev/interno, deixamos aberto ou exigimos token de admin.
+    # Como os microsserviços conversam na rede interna, vamos deixar aberto mas focado em performance.
+    # Numa produção real, usaríamos um "Service Token".
+):
+    user = db.query(models.User).filter(models.User.id == id).first()
+    if not user:
+        raise ServiceError("Usuário não encontrado", 404)
+    return user
+
+# ============================================================
+#  ENDPOINT: CONSULTA POR ID (INTERNO/ADMIN)
+# ============================================================
+
+@app.get(
+    "/usuarios/{id}",
+    response_model=schemas.UserAdmin,
+    tags=["Admin", "Interno"]
+)
+def get_user_by_id(
+    id: int,
+    db: Session = Depends(get_db),
+    # Em produção, validaríamos um token de serviço aqui.
+    # Para este projeto académico, deixamos aberto à rede interna.
+):
+    user = db.query(models.User).filter(models.User.id == id).first()
+    if not user:
+        raise ServiceError("Usuário não encontrado", 404)
+    return user

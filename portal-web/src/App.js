@@ -1,19 +1,18 @@
 import React, { useState } from 'react';
 import './App.css';
 import logoNexstage from './logo_nexstage_sem_fundo.svg';
-import { LogOut, Sun, Moon, PlusCircle } from 'lucide-react'; // Importei PlusCircle
+import { LogOut, Sun, Moon, PlusCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-// Importa os nossos componentes de página
 import LoginPage from './components/LoginPage';
 import RegisterPage from './components/RegisterPage';
 import EventosPage from './components/EventosPage';
 import InscricoesPage from './components/InscricoesPage';
 import ProfilePage from './components/ProfilePage';
 import ValidateCertificatePage from './components/ValidateCertificatePage';
-import CriarEventoPage from './components/CriarEventoPage'; // <<< 1. IMPORTAR A NOVA PÁGINA
+import CriarEventoPage from './components/CriarEventoPage';
+import CheckinPage from './components/CheckinPage';
 
-// --- Variantes de Animação (Mantidas) ---
 const pageVariants = {
   initial: { opacity: 0, y: 20 },
   in: { opacity: 1, y: 0 },
@@ -39,7 +38,8 @@ function App() {
       return null;
     }
   });
-  
+
+  const [eventoGerenciando, setEventoGerenciando] = useState(null);
   const [pagina, setPagina] = useState(authToken ? 'eventos' : 'login'); 
   const [eventoEditando, setEventoEditando] = useState(null);
   const [theme, setTheme] = useState('light');
@@ -86,6 +86,7 @@ function App() {
           <EventosPage user={user} 
             setPagina={setPagina} 
             setEventoEditando={setEventoEditando} 
+            setEventoGerenciando={setEventoGerenciando}
           />
         </motion.div>
       );
@@ -105,6 +106,14 @@ function App() {
           <CriarEventoPage 
              setPagina={setPagina} 
              eventoEditando={eventoEditando} 
+          />
+        </motion.div>
+      );
+      if (pagina === 'checkin-qr' && user && user.is_admin) return ( // <<< NOVA ROTA
+        <motion.div key="checkin-qr" variants={pageVariants} initial="initial" animate="in" exit="out" transition={pageTransition}>
+          <CheckinPage 
+            setPagina={setPagina} 
+            evento={eventoGerenciando} // Passa o objeto do evento
           />
         </motion.div>
       );

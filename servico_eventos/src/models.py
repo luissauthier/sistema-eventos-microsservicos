@@ -7,7 +7,8 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from database import Base
 import enum
-
+from sqlalchemy.dialects.postgresql import UUID
+import uuid
 
 # ============================================================
 #  ENUMS DE STATUS
@@ -37,6 +38,8 @@ class Evento(Base):
     descricao = Column(Text, nullable=True)
     data_evento = Column(DateTime(timezone=True), nullable=False)
 
+    template_certificado = Column(String(50), default="default", nullable=False)
+
     # Auditoria
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
@@ -45,9 +48,11 @@ class Evento(Base):
     presencas = relationship("Presenca", back_populates="evento", cascade="all,delete")
 
     certificados = relationship("Certificado", back_populates="evento", cascade="all,delete")
+    checkin_tokens = relationship("CheckinToken", back_populates="evento", cascade="all,delete")
 
     def __repr__(self):
         return f"<Evento id={self.id} nome='{self.nome}'>"
+    
 
 
 # ============================================================
@@ -140,3 +145,33 @@ class Certificado(Base):
 
     def __repr__(self):
         return f"<Certificado codigo={self.codigo_unico} inscricao={self.inscricao_id}>"
+    
+# ============================================================
+#  TOKEN DE CHECK-IN POR QR CODE
+# ============================================================
+
+def gerar_token_uuid():
+    """Gera um UUID v4 para ser o token."""
+    return str(uuid.uuid4())
+
+class CheckinToken(Base):
+    __tablename__ = "checkin_tokens"
+
+    # Token UUID é a chave primária e o valor que vai no QR Code
+    token = Column(UUID(as_uuid=False), primary_key=True, default=gerar_token_uuid)
+
+    # Liga ao evento
+    evento_id = Column(Integer, ForeignKey("eventos.id"), nullable=False, index=True)
+
+    # Metadados
+    data_expiracao = Column(DateTime(timezone=True), nullable=False)
+    # Flag que permite desativar o token manualmente (ex: se o QR Code vazou)
+    is_active = Column(Boolean, default=True, nullable=False) 
+
+    # Relação com Evento
+    evento = relationship("Evento", back_populates="checkin_tokens")
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    def __repr__(self):
+        return f"<CheckinToken token={self.token} evento={self.evento_id}>"

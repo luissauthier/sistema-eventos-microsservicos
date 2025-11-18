@@ -24,6 +24,7 @@ class EventoBase(BaseModel):
     nome: str = Field(..., min_length=3, max_length=150)
     descricao: Optional[str] = Field(None, max_length=2000)
     data_evento: datetime
+    template_certificado: Optional[str] = "default"
 
     _sanitize = field_validator("nome", "descricao", mode="before")(strip)
 
@@ -182,3 +183,38 @@ class SyncPayload(BaseModel):
     """
     presencas: List[PresencaOfflineSync]
     timestamp_cliente: datetime
+
+# ============================================================
+#  CHECK-IN QR CODE
+# ============================================================
+
+class CheckinTokenCreate(BaseModel):
+    """
+    Payload para a criação de um novo token de check-in.
+    """
+    evento_id: int = Field(..., description="ID do evento para gerar o token.")
+    duracao_minutos: Optional[int] = Field(60, gt=0, description="Duração de validade do token em minutos.")
+
+
+class CheckinTokenResponse(BaseModel):
+    """
+    Resposta da API após a geração do token.
+    """
+    token: str
+    url_publica: str = Field(..., description="URL completa que deve ser codificada no QR Code.")
+    data_expiracao: datetime
+    
+    class Config:
+        from_attributes = True
+
+class CheckinQRCodeResult(BaseModel):
+    """
+    Resultado após consumir o QR Code.
+    """
+    status: str = "success"
+    message: str
+    inscricao_id: int
+    presenca_registrada: bool = False
+
+    class Config:
+        from_attributes = True

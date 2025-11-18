@@ -27,8 +27,13 @@ class UserBase(BaseModel):
     full_name: Optional[str] = Field(None, min_length=2, max_length=100)
     email: Optional[EmailStr] = None
 
+    cpf: Optional[str] = Field(None, max_length=14)
+    telefone: Optional[str] = Field(None, max_length=20)
+    endereco: Optional[str] = Field(None, max_length=255)
+    # --------------------
+
     # --- Sanitização padrão ---
-    @field_validator("username", "full_name", "email", mode="before")
+    @field_validator("username", "full_name", "email", "cpf", "telefone", "endereco", mode="before")
     def sanitize_strings(cls, v):
         if isinstance(v, str):
             return v.strip()
@@ -69,6 +74,9 @@ class User(BaseModel):
     username: str
     full_name: Optional[str]
     email: Optional[EmailStr]
+    cpf: Optional[str]
+    telefone: Optional[str]
+    endereco: Optional[str]
     is_active: bool
     is_verified: bool
 
@@ -97,11 +105,15 @@ class UserUpdate(BaseModel):
     full_name: Optional[str] = Field(None, min_length=2, max_length=100)
     email: Optional[EmailStr] = None
 
-    @field_validator("full_name", "email", mode="before")
+    cpf: Optional[str] = Field(None, max_length=14)
+    telefone: Optional[str] = Field(None, max_length=20)
+    endereco: Optional[str] = Field(None, max_length=255)
+
+    @field_validator("full_name", "email", "cpf", "telefone", "endereco", mode="before")
     def sanitize_strings(cls, v):
         if isinstance(v, str):
             return v.strip()
         return v
 
     class Config:
-        extra = "forbid"  # NÃO permite campos estranhos → segurança
+        extra = "forbid"

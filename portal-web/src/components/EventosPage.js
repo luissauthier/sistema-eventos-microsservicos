@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, ArrowRight, X, Plus, Edit2 } from 'lucide-react'; // <--- 1. Importei Plus
+import { ArrowLeft, ArrowRight, X, Plus, Edit2, QrCode } from 'lucide-react'; // <--- 1. Importei Plus
 import { buttonHoverTap } from '../App';
 import api from '../api';
 
@@ -15,16 +15,19 @@ const itemVariants = {
 };
 
 // 2. Recebemos setPagina nas props
-function EventosPage({ setPagina, setEventoEditando }) { 
+function EventosPage({ setPagina, setEventoEditando, setEventoGerenciando, user }) { 
   const [eventos, setEventos] = useState([]);
   const [inscricoesIds, setInscricoesIds] = useState(new Set());  
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [eventoSelecionado, setEventoSelecionado] = useState(null);
+
+  const handleCheckinQr = (evento) => {
+    setEventoGerenciando(evento);
+    setPagina('checkin-qr');
+  };
   
-  // Leitura do usuário
-  const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
-  const isAdmin = storedUser && storedUser.is_admin === true;
+  const isAdmin = user && user.is_admin === true;
 
   useEffect(() => {
     const carregarDados = async () => {
@@ -186,6 +189,16 @@ function EventosPage({ setPagina, setEventoEditando }) {
                 >
                   <h3>{evento.nome}</h3>
                   <p><strong>Data:</strong> {new Date(evento.data_evento).toLocaleDateString()}</p>
+
+                  {isAdmin && (
+                    <motion.button
+                        className="btn-admin"
+                        onClick={() => handleCheckinQr(evento)}
+                        {...buttonHoverTap}
+                    >
+                        <QrCode size={14} /> Gerar QR Check-in
+                    </motion.button>
+                  )}
                   
                   {jaInscrito && (
                       <p style={{ color: '#10B981', fontWeight: 'bold', fontSize: '0.9rem', marginTop: '0.5rem' }}>
