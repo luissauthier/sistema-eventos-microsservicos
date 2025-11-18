@@ -3,25 +3,19 @@
  * IPC Handler — Operações Offline
  *
  * Este módulo controla TODAS as operações locais feitas com SQLite:
- *   - criar usuário local
- *   - criar inscrição local
- *   - registrar presença local
- *   - consultar dados locais
- *
- * Nenhum conhecimento de API externa.
- * Nenhuma dependência de token.
- * Totalmente isolado do fluxo online.
+ * - criar usuário local
+ * - criar inscrição local
+ * - registrar presença local
+ * - consultar dados locais
  */
 
 const { ipcMain } = require("electron");
 const { createLogger } = require("../logger");
-const db = require("../db/db");
 
 const logger = createLogger("ipc-offline");
 
-
-function registerOfflineHandlers() {
-
+// Recebe a instância do banco (db) como argumento
+module.exports = function registerOfflineHandlers(db) {
 
   /* ---------------------------------------------------
      OFFLINE 1 — Criar Usuário Local
@@ -36,26 +30,24 @@ function registerOfflineHandlers() {
     }
 
     try {
-      const result = db.run(
+      const result = await db.run(
         `INSERT INTO usuarios (nome, email, senha, sincronizado)
          VALUES (?, ?, ?, 0)`,
         [nome, email, senha]
       );
 
       logger.info("local_user_created", {
-        id_local: result.lastInsertRowid,
+        id_local: result.lastID,
         email
       });
 
-      return { success: true, id_local: result.lastInsertRowid };
+      return { success: true, id_local: result.lastID };
 
     } catch (err) {
       logger.error("local_user_create_error", { error: err.message });
       return { success: false, message: err.message };
     }
   });
-
-
 
   /* ---------------------------------------------------
      OFFLINE 2 — Criar Inscrição Local
@@ -73,27 +65,25 @@ function registerOfflineHandlers() {
     }
 
     try {
-      const result = db.run(
+      const result = await db.run(
         `INSERT INTO inscricoes (usuario_id_local, evento_id_server, sincronizado)
          VALUES (?, ?, 0)`,
         [usuario_id_local, evento_id_server]
       );
 
       logger.info("local_inscricao_created", {
-        id_local: result.lastInsertRowid,
+        id_local: result.lastID,
         usuario_id_local,
         evento_id_server
       });
 
-      return { success: true, id_local: result.lastInsertRowid };
+      return { success: true, id_local: result.lastID };
 
     } catch (err) {
       logger.error("local_inscricao_create_error", { error: err.message });
       return { success: false, message: err.message };
     }
   });
-
-
 
   /* ---------------------------------------------------
      OFFLINE 3 — Registrar Presença Local
@@ -106,26 +96,24 @@ function registerOfflineHandlers() {
     }
 
     try {
-      const result = db.run(
+      const result = await db.run(
         `INSERT INTO presencas (inscricao_id_local, sincronizado)
          VALUES (?, 0)`,
         [inscricaoIdLocal]
       );
 
       logger.info("local_presenca_registered", {
-        id_local: result.lastInsertRowid,
+        id_local: result.lastID,
         inscricaoIdLocal
       });
 
-      return { success: true, id_local: result.lastInsertRowid };
+      return { success: true, id_local: result.lastID };
 
     } catch (err) {
       logger.error("local_presenca_error", { error: err.message });
       return { success: false, message: err.message };
     }
   });
-
-
 
   /* ---------------------------------------------------
      OFFLINE 4 — Buscar Dados Locais
@@ -134,10 +122,12 @@ function registerOfflineHandlers() {
     logger.info("local_data_query");
 
     try {
-      const eventos = db.all(`SELECT * FROM eventos ORDER BY data`);
-      const presencas = db.all(`SELECT * FROM presencas`);
+      // CORREÇÃO: Ordenar por data_evento (e não 'data')
+      const eventos = await db.all(`SELECT * FROM eventos ORDER BY data_evento`);
+      const presencas = await db.all(`SELECT * FROM presencas`);
 
-      const inscricoes = db.all(`
+      // Join para trazer nomes bonitos na tela
+      const inscricoes = await db.all(`
         SELECT
           i.id_local,
           i.server_id,
@@ -171,7 +161,4 @@ function registerOfflineHandlers() {
     }
   });
 
-}
-
-
-module.exports = registerOfflineHandlers;
+};

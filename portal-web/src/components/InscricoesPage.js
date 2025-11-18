@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { CheckCircle, Clock, X, Award } from 'lucide-react';
+import { CheckCircle, Clock, X, Award, AlertTriangle } from 'lucide-react'; // Adicionei AlertTriangle
 import { buttonHoverTap } from '../App';
 import api from '../api';
 
@@ -17,12 +17,11 @@ const itemVariants = {
 // Componente "InscricoesPage" (Agora com dados reais)
 function InscricoesPage() {
   const [inscricoes, setInscricoes] = useState([]);
-  const [presencas, setPresencas] = useState([]); // Lista de IDs
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // Função para buscar os dados da API
-  const fetchData = async () => {
+  // Função para buscar os dados da API (substitui 'fetchData')
+  const carregarInscricoes = async () => {
     try {
       setLoading(true);
       
@@ -30,10 +29,7 @@ function InscricoesPage() {
       const inscResponse = await api.get('/inscricoes/me');
       setInscricoes(inscResponse.data);
       
-      // 2. TODO: Buscar as presenças do usuário
-      // O backend ainda não tem um endpoint 'GET /presencas/me'
-      // Por enquanto, vamos manter mockado:
-      setPresencas([1]); // Assumindo check-in para inscrição 1
+      // 2. REMOVIDO: Não usamos mais dados mockados de presença
       
     } catch (err) {
       setError('Falha ao carregar suas inscrições.');
@@ -43,47 +39,54 @@ function InscricoesPage() {
     }
   };
 
-  // Executa o fetchData quando o componente carregar
+  // Executa o carregarInscricoes quando o componente carregar
   useEffect(() => {
-    fetchData();
+    carregarInscricoes();
   }, []); // [] = Executa apenas uma vez
 
-  // Função de Cancelar (API Real)
-  const handleCancelarInscricao = async (inscricaoId) => {
-    if (window.confirm("Tem a certeza que quer cancelar esta inscrição?")) {
-      try {
-        await api.delete(`/inscricoes?id=${inscricaoId}`);
-        // Atualiza a lista local removendo a inscrição
-        setInscricoes(inscricoes.filter(insc => insc.id !== inscricaoId));
-        alert('Inscrição cancelada.');
-      } catch (err) {
-        alert('Erro ao cancelar inscrição. (Talvez já tenha check-in?)');
-        console.error(err);
-      }
+  // Função de Cancelar (API Real, agora chamando carregarInscricoes)
+  const handleCancelarInscricao = async (id) => {
+    // Confirmação antes de cancelar
+    if (!window.confirm("Tem certeza que deseja cancelar sua inscrição?")) {
+        return;
+    }
+
+    try {
+        await api.patch(`/inscricoes/${id}/cancelar`, {
+            justificativa: "Cancelado pelo usuário via portal"
+        });
+
+        alert("Inscrição cancelada com sucesso!");
+        
+        // Recarrega a lista para atualizar a tela
+        carregarInscricoes();
+
+    } catch (error) {
+        console.error("Erro ao cancelar:", error);
+        alert("Não foi possível cancelar a inscrição. Tente novamente.");
     }
   };
   
   // Função de Emitir Certificado (API Real)
   const handleEmitirCertificado = async (inscricao) => {
-    try {
-      const response = await api.post('/certificados', {
-        evento_id: inscricao.evento.id,
-        nome_evento: inscricao.evento.nome
-      });
-      alert(`Certificado emitido! Código: ${response.data.codigo_autenticacao}`);
+    // TODO: Esta lógica precisa ser definida.
+    // O backend não parece ter uma rota de *emissão* para usuário (só admin)
+    // A rota /certificados é para validar.
+    alert("Funcionalidade de emissão/download ainda não implementada.");
+
+    /* try {
+      const response = await api.post('/certificados/emitir/me', { ... });
+      alert(`Certificado emitido!`);
     } catch (err) {
       alert('Erro ao emitir. (Você precisa ter o check-in confirmado!)');
-      console.error(err);
     }
+    */
   };
   
-  // Helper para verificar presença (ainda mockado)
-  const hasCheckin = (inscricaoId) => presencas.includes(inscricaoId);
 
   if (loading) return <p>A carregar inscrições...</p>;
   if (error) return <p className="form-error">{error}</p>;
 
-  // JSX (Mantido do original, mas com dados reais)
   return (
     <motion.div 
       className="lista-inscricoes"
@@ -95,51 +98,69 @@ function InscricoesPage() {
       {inscricoes.length === 0 ? (
         <p>Você ainda não se inscreveu em nenhum evento.</p>
       ) : (
-        inscricoes.map(inscricao => (
-          <motion.div 
-            key={inscricao.id} 
-            className="card-inscricao"
-            variants={itemVariants}
-          >
-            <h3>{inscricao.evento.nome}</h3>
-            
-            {hasCheckin(inscricao.id) ? (
-              <span className="status-checkin checkin-ok">
-                <CheckCircle size={16} /> Presença Registrada
-              </span>
-            ) : (
-              <span className="status-checkin checkin-pendente">
-                <Clock size={16} /> Aguardando Check-in
-              </span>
-            )}
+        inscricoes.map(inscricao => {
+          
+          // === LÓGICA DE ESTADO (Lendo dados reais do Backend) ===
+          const hasCheckin = inscricao.checkin_realizado === true;
+          const status = inscricao.status.toLowerCase(); // 'ativa' ou 'cancelada'
+          // =======================================================
 
-            {/* Ações do Card */}
-            <div className="card-actions">
-              {/* Botão de Cancelar */}
-              {!hasCheckin(inscricao.id) && (
-                <motion.button 
-                  className="btn-cancelar-small"
-                  onClick={() => handleCancelarInscricao(inscricao.id)}
-                  {...buttonHoverTap}
-                >
-                  <X size={14} /> Cancelar
-                </motion.button>
-              )}
+          return (
+            <motion.div 
+              key={inscricao.id} 
+              className="card-inscricao"
+              // Adiciona uma classe se estiver cancelado para "apagar" o card
+              style={{ opacity: status === 'cancelada' ? 0.6 : 1.0 }} 
+              variants={itemVariants}
+            >
+              <h3>{inscricao.evento.nome}</h3>
               
-              {/* Botão de Emitir Certificado (Caso 3) */}
-              {hasCheckin(inscricao.id) && (
-                 <motion.button 
-                  className="btn-certificado"
-                  onClick={() => handleEmitirCertificado(inscricao)}
-                  {...buttonHoverTap}
-                >
-                  <Award size={14} /> Emitir Certificado
-                </motion.button>
+              {/* === LÓGICA DE TAGS DE STATUS === */}
+              {status === 'cancelada' ? (
+                <span className="status-checkin" style={{backgroundColor: '#E5E7EB', color: '#4B5563', borderColor: '#D1D5DB'}}>
+                  <AlertTriangle size={16} /> Inscrição Cancelada
+                </span>
+              ) : hasCheckin ? (
+                <span className="status-checkin checkin-ok">
+                  <CheckCircle size={16} /> Presença Registrada
+                </span>
+              ) : (
+                <span className="status-checkin checkin-pendente">
+                  <Clock size={16} /> Aguardando Check-in
+                </span>
               )}
-            </div>
-            
-          </motion.div>
-        ))
+
+              {/* === AÇÕES DO CARD (Botões) === */}
+              <div className="card-actions">
+                
+                {/* Botão de Cancelar: Só aparece se ATIVA e SEM CHECKIN */}
+                {status === 'ativa' && !hasCheckin && (
+                  <motion.button 
+                    className="btn-cancelar-small"
+                    onClick={() => handleCancelarInscricao(inscricao.id)}
+                    {...buttonHoverTap}
+                  >
+                    <X size={14} /> Cancelar
+                  </motion.button>
+                )}
+                
+                {/* Botão de Certificado: Só aparece se TIVER CHECKIN */}
+                {hasCheckin && (
+                   <motion.button 
+                    className="btn-certificado"
+                    onClick={() => handleEmitirCertificado(inscricao)}
+                    {...buttonHoverTap}
+                  >
+                    <Award size={14} /> Emitir Certificado
+                  </motion.button>
+                )}
+
+                {/* Se estiver cancelada, nenhum botão aparece */}
+              </div>
+              
+            </motion.div>
+          );
+        })
       )}
     </motion.div>
   );

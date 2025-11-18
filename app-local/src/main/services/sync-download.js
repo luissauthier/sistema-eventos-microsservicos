@@ -63,7 +63,7 @@ module.exports = function createSyncDownloadService(db) {
       // 3) EVENTOS
       // ---------------------------------------------------------
       for (const evt of eventosApi) {
-        events.upsertFromServer(evt);
+        await events.upsertFromServer(evt);
       }
 
       // ---------------------------------------------------------

@@ -164,7 +164,11 @@ function App() {
       const res = await window.api.offline.buscarDadosLocais();
       if (res?.success) {
         // normalizar shape: { eventos, inscricoes, presencas } expected
-        setLocalData(res.data || { eventos: [], inscricoes: [], presencas: [] });
+        setLocalData({
+          eventos: res.eventos || [],
+          inscricoes: res.inscricoes || [],
+          presencas: res.presencas || []
+        });
         setAppState(AppState.OFFLINE);
         setMessage(`Modo offline: ${res.data?.eventos?.length || 0} eventos carregados.`);
       } else {
@@ -402,7 +406,7 @@ function App() {
                   <motion.div key={evento.id_server} className="p-3 border border-border rounded-base flex items-center justify-between">
                     <div>
                       <div className="font-medium">{evento.nome}</div>
-                      <div className="text-xs text-text-muted">{new Date(evento.data).toLocaleString()}</div>
+                      <div className="text-xs text-text-muted">{new Date(evento.data_evento).toLocaleString()}</div>
                     </div>
 
                     <div className="flex items-center gap-2">

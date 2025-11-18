@@ -36,11 +36,19 @@ class EventoCreate(EventoBase):
 class Evento(EventoBase):
     """Dados públicos retornados de um evento."""
     id: int
-    created_at: datetime
-    updated_at: Optional[datetime]
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
+
+class EventoUpdate(BaseModel):
+    """Campos opcionais para atualização"""
+    nome: Optional[str] = Field(None, min_length=3, max_length=150)
+    descricao: Optional[str] = Field(None, max_length=2000)
+    data_evento: Optional[datetime] = None
+
+    _sanitize = field_validator("nome", "descricao", mode="before")(strip)
 
 
 # ============================================================
@@ -70,11 +78,11 @@ class Inscricao(BaseModel):
     id: int
     usuario_id: int
     evento_id: int
-    usuario_username: Optional[str]
+    usuario_username: Optional[str] = None
     status: InscricaoStatus
-    data_inscricao: datetime
-    created_at: datetime
-    updated_at: Optional[datetime]
+    data_inscricao: Optional[datetime] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
@@ -84,7 +92,8 @@ class InscricaoDetalhes(Inscricao):
     """
     Inscrição com detalhes completos do evento: usada nas telas de usuário.
     """
-    evento: Evento
+    evento: Optional[Evento] = None
+    checkin_realizado: bool = False
 
 
 class InscricaoCancelamento(BaseModel):
@@ -124,8 +133,8 @@ class Presenca(BaseModel):
     evento_id: int
     inscricao_id: int
     origem: PresencaOrigem
-    data_checkin: datetime
-    created_at: datetime
+    data_checkin: Optional[datetime] = None
+    created_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True

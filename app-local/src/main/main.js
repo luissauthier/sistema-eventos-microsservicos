@@ -65,7 +65,6 @@ app.whenReady().then(async () => {
     // 1) Inicializar banco SQLite
     const db = await createDatabase(app);
     logger.info("database_initialized");
-
     // 2) Registrar IPCs (agora passando o DB)
     initIPC(db);
     logger.info("ipc_handlers_registered");

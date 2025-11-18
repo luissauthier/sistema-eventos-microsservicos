@@ -142,7 +142,27 @@ function makeDbHelpers(db) {
     };
   };
 
-  // Transaction helper: recebe uma async function que recebe os helpers e executa COMMIT/ROLLBACK
+  // --- NOVAS FUNÇÕES DE TRANSAÇÃO MANUAL ---
+  
+  const transactionStart = async function () {
+    await exec("BEGIN TRANSACTION");
+    return { id: Date.now() }; // Retorna um handle dummy
+  };
+
+  const transactionCommit = async function (tx) {
+    await exec("COMMIT");
+  };
+
+  const transactionRollback = async function (tx) {
+    // Rollback seguro (pode falhar se não houver transação ativa, mas ignoramos no log de erro crítico)
+    try {
+      await exec("ROLLBACK");
+    } catch (err) {
+      logger.warn("db_rollback_warning", { error: err.message });
+    }
+  };
+
+  // Transaction helper funcional (mantido para compatibilidade se necessário)
   const transaction = async function (fn) {
     try {
       await exec("BEGIN TRANSACTION");
@@ -159,7 +179,18 @@ function makeDbHelpers(db) {
     }
   };
 
-  return { run, get, all, exec, prepare, transaction };
+  return { 
+    run, 
+    get, 
+    all, 
+    exec, 
+    prepare, 
+    transaction,
+    // Exportando os novos métodos manuais
+    transactionStart,
+    transactionCommit,
+    transactionRollback
+  };
 }
 
 /**
@@ -207,21 +238,12 @@ async function createDatabase(app) {
     });
 
   // Configurações práticas e seguras
-  // PRAGMA statements must be executed serially; use db.serialize
   await new Promise((resolve, reject) => {
     db.serialize(() => {
-      // Foreign keys ON
       db.run("PRAGMA foreign_keys = ON;");
-      // WAL mode for concurrent reads/writes
       db.run("PRAGMA journal_mode = WAL;");
-      // reasonable busy timeout to avoid SQLITE_BUSY
       db.run("PRAGMA busy_timeout = 5000;");
-      // synchronous normal (good perf + safety)
       db.run("PRAGMA synchronous = NORMAL;");
-
-      // optionally set mmap_size for performance (if supported)
-      // db.run("PRAGMA mmap_size = 268435456;"); // 256MB
-
       resolve();
     });
   });
@@ -234,7 +256,6 @@ async function createDatabase(app) {
     logger.info("db_schema_initialized");
   } catch (err) {
     logger.error("db_schema_error", { error: err.message });
-    // Fechar DB para não deixar em estado inconsistente
     await close();
     throw err;
   }

@@ -82,6 +82,10 @@ class Inscricao(Base):
 
     def __repr__(self):
         return f"<Inscricao id={self.id} usuario={self.usuario_username} evento={self.evento_id} status={self.status}>"
+    
+    @property
+    def checkin_realizado(self) -> bool:
+        return len(self.presencas) > 0
 
 
 # ============================================================

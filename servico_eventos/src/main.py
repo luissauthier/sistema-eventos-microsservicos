@@ -3,7 +3,7 @@
 from fastapi import (
     FastAPI, Depends, HTTPException, status, Query, BackgroundTasks, Request
 )
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, selectinload
 from typing import List
 from datetime import datetime, timedelta
 import httpx
@@ -125,6 +125,34 @@ def create_evento(
     logger.info("evento_created", extra={"evento_id": evento.id})
     return evento
 
+@app.patch("/admin/eventos/{id}", response_model=schemas.Evento, tags=["Admin"])
+def update_evento(
+    id: int,
+    update_data: schemas.EventoUpdate,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin_user)
+):
+    # 1. Buscar evento
+    evento = db.query(models.Evento).filter_by(id=id).first()
+    if not evento:
+        raise ServiceError("Evento não encontrado", 404)
+
+    # 2. Atualizar campos enviados
+    dados = update_data.model_dump(exclude_unset=True)
+    
+    for key, value in dados.items():
+        setattr(evento, key, value)
+
+    evento.updated_at = datetime.utcnow()
+    
+    # 3. Salvar
+    db.add(evento)
+    db.commit()
+    db.refresh(evento)
+    
+    logger.info("evento_updated", extra={"evento_id": evento.id})
+    return evento
+
 
 # ============================================================
 #                USUÁRIO — INSCRIÇÃO EM EVENTOS
@@ -147,6 +175,23 @@ def create_inscricao(
         evento_id=body.evento_id
     ).first()
     if existente:
+        if existente.status == models.InscricaoStatus.CANCELADA:
+            existente.status = models.InscricaoStatus.ATIVA
+            existente.updated_at = datetime.utcnow()
+            
+            db.add(existente)
+            db.commit()
+            db.refresh(existente)
+            
+            # Opcional: Enviar e-mail de "Re-inscrição"
+            background.add_task(send_notification_guaranteed, {
+                "tipo": "inscricao",
+                "destinatario": user.email,
+                "nome": user.full_name or user.username,
+                "nome_evento": evento.nome
+            })
+            
+        # Retorna a inscrição (agora ativa ou já ativa)
         return existente
 
     insc = models.Inscricao(
@@ -168,6 +213,19 @@ def create_inscricao(
 
     return insc
 
+# ============================================================
+#              USUÁRIO — LISTAR MINHAS INSCRIÇÕES
+# ============================================================
+
+@app.get("/inscricoes/me", response_model=List[schemas.InscricaoDetalhes], tags=["Inscrições"])
+def minhas_inscricoes(
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user)
+):
+    return db.query(models.Inscricao).options(
+        joinedload(models.Inscricao.evento),
+        selectinload(models.Inscricao.presencas)
+    ).filter_by(usuario_id=user.id).all()
 
 # ============================================================
 #        USUÁRIO — CONSULTA DE UMA INSCRIÇÃO ESPECÍFICA
@@ -188,21 +246,6 @@ def get_inscricao(
 
     return insc
 
-
-# ============================================================
-#              USUÁRIO — LISTAR MINHAS INSCRIÇÕES
-# ============================================================
-
-@app.get("/inscricoes/me", response_model=List[schemas.InscricaoDetalhes], tags=["Inscrições"])
-def minhas_inscricoes(
-    db: Session = Depends(get_db),
-    user: User = Depends(get_current_user)
-):
-    return db.query(models.Inscricao).options(
-        joinedload(models.Inscricao.evento)
-    ).filter_by(usuario_id=user.id).all()
-
-
 # ============================================================
 #           USUÁRIO — CANCELAMENTO (PATCH, NÃO DELETE)
 # ============================================================
@@ -215,29 +258,49 @@ def cancelar_inscricao(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user)
 ):
+    # Log inicial
+    logger.info(f"DEBUG: Tentando cancelar inscricao_id={id} para usuario_id={user.id}")
+
+    # 1. Verifica existência
     insc = db.query(models.Inscricao).filter_by(id=id).first()
     if not insc:
+        logger.error(f"DEBUG: Inscrição {id} não encontrada no banco.")
         raise ServiceError("Inscrição não encontrada", 404)
 
     if insc.usuario_id != user.id:
         raise ServiceError("Você não pode cancelar esta inscrição", 403)
 
+    # 2. Verifica presença
     presenca = db.query(models.Presenca).filter_by(inscricao_id=id).first()
     if presenca:
         raise ServiceError("Não é possível cancelar: já houve presença", 400)
 
-    insc.status = models.InscricaoStatus.CANCELADA
-    insc.updated_at = datetime.utcnow()
-
+    # 3. UPDATE DIRETO COM DEBUG E .value
+    # Usamos .value para garantir que enviamos "cancelada" (str) e não o objeto Enum
+    rows = db.query(models.Inscricao).filter(models.Inscricao.id == id).update({
+        "status": models.InscricaoStatus.CANCELADA.value, 
+        "updated_at": datetime.utcnow()
+    })
+    
     db.commit()
+    
+    # Log do resultado do banco
+    logger.info(f"DEBUG: Update executado. Linhas afetadas no banco: {rows}")
+    
+    if rows == 0:
+        # Se isso acontecer, algo muito estranho ocorreu (concorrência ou filtro errado)
+        logger.warning("ALERTA: O comando update rodou mas nenhuma linha foi alterada!")
 
-    evento = insc.evento
+    # 4. Recupera dados frescos para o e-mail
+    # (Buscamos o evento direto para não depender do objeto 'insc' antigo)
+    nome_evento = db.query(models.Evento).filter_by(id=insc.evento_id).first().nome
 
+    user_email = getattr(user, 'email', None)
     background.add_task(send_notification_guaranteed, {
         "tipo": "cancelamento",
-        "destinatario": user.email,
+        "destinatario": user_email,
         "nome": user.full_name or user.username,
-        "nome_evento": evento.nome
+        "nome_evento": nome_evento
     })
 
     return success("Inscrição cancelada com sucesso.")

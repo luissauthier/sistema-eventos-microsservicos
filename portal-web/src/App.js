@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import './App.css';
 import logoNexstage from './logo_nexstage_sem_fundo.svg';
-import { LogOut, Sun, Moon } from 'lucide-react';
+import { LogOut, Sun, Moon, PlusCircle } from 'lucide-react'; // Importei PlusCircle
 import { motion, AnimatePresence } from 'framer-motion';
 
 // Importa os nossos componentes de página
@@ -9,10 +9,9 @@ import LoginPage from './components/LoginPage';
 import RegisterPage from './components/RegisterPage';
 import EventosPage from './components/EventosPage';
 import InscricoesPage from './components/InscricoesPage';
-// --- NOVOS IMPORTS ---
 import ProfilePage from './components/ProfilePage';
 import ValidateCertificatePage from './components/ValidateCertificatePage';
-// ---------------------
+import CriarEventoPage from './components/CriarEventoPage'; // <<< 1. IMPORTAR A NOVA PÁGINA
 
 // --- Variantes de Animação (Mantidas) ---
 const pageVariants = {
@@ -32,12 +31,24 @@ export const buttonHoverTap = {
 
 function App() {
   const [authToken, setAuthToken] = useState(localStorage.getItem('access_token'));
+  // 2. ADICIONAR ESTADO PARA O OBJETO DO USUÁRIO
+  const [user, setUser] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('user') || 'null');
+    } catch {
+      return null;
+    }
+  });
+  
   const [pagina, setPagina] = useState(authToken ? 'eventos' : 'login'); 
+  const [eventoEditando, setEventoEditando] = useState(null);
   const [theme, setTheme] = useState('light');
 
   const handleLogout = () => {
     localStorage.removeItem('access_token');
+    localStorage.removeItem('user'); // <<< 3. LIMPAR O USER NO LOGOUT
     setAuthToken(null);
+    setUser(null); // <<< 3. LIMPAR O ESTADO DO USER
     setPagina('login');
   };
 
@@ -51,7 +62,8 @@ function App() {
     if (!authToken) {
       if (pagina === 'login') return (
         <motion.div key="login" variants={pageVariants} initial="initial" animate="in" exit="out" transition={pageTransition}>
-          <LoginPage setPagina={setPagina} setAuthToken={setAuthToken} />
+          {/* 4. PASSAR O setUser PARA O LOGIN */}
+          <LoginPage setPagina={setPagina} setAuthToken={setAuthToken} setUser={setUser} />
         </motion.div>
       );
       if (pagina === 'register') return (
@@ -59,7 +71,6 @@ function App() {
           <RegisterPage setPagina={setPagina} />
         </motion.div>
       );
-      // --- NOVA PÁGINA PÚBLICA ---
       if (pagina === 'validar') return (
         <motion.div key="validar" variants={pageVariants} initial="initial" animate="in" exit="out" transition={pageTransition}>
           <ValidateCertificatePage setPagina={setPagina} />
@@ -71,7 +82,11 @@ function App() {
     if (authToken) {
       if (pagina === 'eventos') return (
         <motion.div key="eventos" variants={pageVariants} initial="initial" animate="in" exit="out" transition={pageTransition}>
-          <EventosPage />
+          {/* 5. PASSAR 'user' e 'setPagina' PARA EVENTOS */}
+          <EventosPage user={user} 
+            setPagina={setPagina} 
+            setEventoEditando={setEventoEditando} 
+          />
         </motion.div>
       );
       if (pagina === 'inscricoes') return (
@@ -79,10 +94,18 @@ function App() {
           <InscricoesPage />
         </motion.div>
       );
-      // --- NOVA PÁGINA PROTEGIDA ---
       if (pagina === 'perfil') return (
         <motion.div key="perfil" variants={pageVariants} initial="initial" animate="in" exit="out" transition={pageTransition}>
           <ProfilePage />
+        </motion.div>
+      );
+      // 6. ADICIONAR A ROTA DE CRIAR EVENTO (SÓ PODE ACESSAR SE FOR ADMIN)
+      if (pagina === 'criar-evento' && user && user.is_admin) return (
+        <motion.div key="criar-evento" variants={pageVariants} initial="initial" animate="in" exit="out" transition={pageTransition}>
+          <CriarEventoPage 
+             setPagina={setPagina} 
+             eventoEditando={eventoEditando} 
+          />
         </motion.div>
       );
     }
@@ -90,7 +113,7 @@ function App() {
     // Fallback
     return (
       <motion.div key="login-fallback" variants={pageVariants} initial="initial" animate="in" exit="out" transition={pageTransition}>
-        <LoginPage setPagina={setPagina} setAuthToken={setAuthToken} />
+        <LoginPage setPagina={setPagina} setAuthToken={setAuthToken} setUser={setUser} />
       </motion.div>
     );
   };
@@ -117,13 +140,23 @@ function App() {
             >
               Minhas Inscrições
             </button>
-            {/* --- NOVO BOTÃO DE PERFIL --- */}
             <button 
               className={pagina === 'perfil' ? 'active' : ''}
               onClick={() => setPagina('perfil')}
             >
               Meu Perfil
             </button>
+            
+            {/* 7. BOTÃO DE ADMIN (SÓ APARECE SE user.is_admin === true) */}
+            {user && user.is_admin && (
+              <button 
+                className={pagina === 'criar-evento' ? 'active-admin' : 'btn-admin'}
+                onClick={() => setPagina('criar-evento')}
+              >
+                <PlusCircle size={16} />
+                Novo Evento
+              </button>
+            )}
           </nav>
         )}
         

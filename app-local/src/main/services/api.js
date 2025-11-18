@@ -107,6 +107,11 @@ module.exports.getCurrentUser = async function getCurrentUser(token) {
   return response.data;
 };
 
+module.exports.getAllUsers = async function getAllUsers(token) {
+  const response = await http.get("/usuarios", authHeader(token));
+  return response.data;
+};
+
 module.exports.getMe = module.exports.getCurrentUser;
 
 module.exports.registerUser = async function registerUser(token, localUser) {
@@ -135,7 +140,7 @@ module.exports.getEventos = async function getEventos(token) {
 // API: INSCRIÇÕES
 // ================================================================
 module.exports.getAllInscricoes = async function getAllInscricoes(token) {
-  const response = await http.get("/inscricoes/all", authHeader(token));
+  const response = await http.get("/admin/inscricoes/all", authHeader(token));
   return response.data;
 };
 

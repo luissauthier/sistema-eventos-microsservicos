@@ -14,11 +14,7 @@ from servico_comum.exceptions import (
     service_error_handler,
     validation_error_handler
 )
-from servico_comum.auth import (
-    get_current_user,
-    create_access_token,
-    require_roles
-)
+from servico_comum.auth import require_roles
 from servico_comum.responses import success
 
 # --- Imports locais ---
@@ -130,7 +126,7 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
     if not user or not auth.verify_password(form_data.password, user.hashed_password):
         raise ServiceError("Credenciais inválidas", 401)
 
-    token = create_access_token(
+    token = auth.create_access_token(
         sub=user.username,
         roles=["admin"] if user.is_admin else ["user"]
     )
@@ -146,10 +142,10 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
 
 @app.get(
     "/usuarios/me",
-    response_model=schemas.User,
+    response_model=schemas.UserAdmin,
     tags=["Usuários"]
 )
-def read_me(current_user: models.User = Depends(get_current_user)):
+def read_me(current_user: models.User = Depends(auth.get_current_user)):
     """
     Retorna os dados públicos do usuário autenticado.
     """
@@ -168,7 +164,7 @@ def read_me(current_user: models.User = Depends(get_current_user)):
 def update_me(
     update: schemas.UserUpdate,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user)
+    current_user: models.User = Depends(auth.get_current_user)
 ):
     """
     Atualiza os dados do próprio usuário.

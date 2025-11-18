@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, ArrowRight, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, X, Plus, Edit2 } from 'lucide-react'; // <--- 1. Importei Plus
 import { buttonHoverTap } from '../App';
 import api from '../api';
 
@@ -14,23 +14,43 @@ const itemVariants = {
   visible: { opacity: 1, y: 0 }
 };
 
-function EventosPage() {
+// 2. Recebemos setPagina nas props
+function EventosPage({ setPagina, setEventoEditando }) { 
   const [eventos, setEventos] = useState([]);
+  const [inscricoesIds, setInscricoesIds] = useState(new Set());  
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [eventoSelecionado, setEventoSelecionado] = useState(null);
+  
+  // Leitura do usuário
+  const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
+  const isAdmin = storedUser && storedUser.is_admin === true;
 
-  // NOTA: A lógica de 'inscricoes' e 'checkins' foi movida para
-  // o componente 'InscricoesPage' para simplificar.
-  // Vamos focar aqui em listar e permitir a inscrição.
-
-  // 1. Buscar Eventos da API
   useEffect(() => {
-    const fetchEventos = async () => {
+    const carregarDados = async () => {
       try {
         setLoading(true);
-        const response = await api.get('/eventos');
-        setEventos(response.data);
+        
+        // A. Busca Eventos
+        const responseEventos = await api.get('/eventos');
+        setEventos(responseEventos.data);
+
+        // B. Tenta buscar inscrições
+        try {
+          const responseInscricoes = await api.get('/inscricoes/me');
+          
+          // FILTRO IMPORTANTE: Só consideramos inscrito se o status for 'ativa'
+          // Usamos toLowerCase() para garantir, pois seu banco salvou 'CANCELADA' (maiúsculo)
+          const inscricoesAtivas = responseInscricoes.data.filter(
+              insc => insc.status && insc.status.toLowerCase() === 'ativa'
+          );
+
+          const ids = new Set(inscricoesAtivas.map(insc => insc.evento_id));
+          setInscricoesIds(ids);
+        } catch (authErr) {
+          console.log("Visitante ou sem inscrições.");
+        }
+
       } catch (err) {
         setError('Falha ao carregar eventos.');
         console.error(err);
@@ -38,20 +58,31 @@ function EventosPage() {
         setLoading(false);
       }
     };
-    fetchEventos();
-  }, []); // [] = Executa apenas uma vez
+    carregarDados();
+  }, []); 
 
-  // 2. Lógica de Inscrição (API Real)
+  const handleEditar = (evento) => {
+    setEventoEditando(evento); // Salva o evento no estado do App
+    setPagina('criar-evento'); // Navega para o formulário
+  };
+
+  const handleNovo = () => {
+    setEventoEditando(null);
+    setPagina('criar-evento');
+  };
+
   const handleInscricao = async (evento) => {
     try {
       await api.post('/inscricoes', {
         evento_id: evento.id,
-        nome_evento: evento.nome // O nosso backend de certificados precisa disto
+        nome_evento: evento.nome
       });
+      
+      const novosIds = new Set(inscricoesIds);
+      novosIds.add(evento.id);
+      setInscricoesIds(novosIds);
+
       alert('Inscrição realizada com sucesso!');
-      // Idealmente, deveríamos atualizar o estado 'inscricoes'
-      // Mas por agora, a API registou.
-      setEventoSelecionado(null); // Fecha o detalhe
     } catch (err) {
       if (err.response && err.response.status === 401) {
         alert('Você precisa estar logado para se inscrever.');
@@ -62,16 +93,15 @@ function EventosPage() {
     }
   };
 
-  // A lógica de cancelamento está no 'InscricoesPage'
-
   if (loading) return <p>A carregar eventos...</p>;
   if (error) return <p className="form-error">{error}</p>;
 
-  // JSX (Mantido do original)
+  const isSelecionadoInscrito = eventoSelecionado ? inscricoesIds.has(eventoSelecionado.id) : false;
+
   return (
     <>
       {eventoSelecionado ? (
-        // Detalhes do Evento
+        // === Detalhes do Evento ===
         <motion.div 
           className="evento-detalhe"
           initial={{ opacity: 0, scale: 0.95 }}
@@ -85,45 +115,110 @@ function EventosPage() {
           >
             <ArrowLeft size={16} /> Voltar para a lista
           </motion.button>
+          
           <h2>{eventoSelecionado.nome}</h2>
           <p><strong>Data:</strong> {new Date(eventoSelecionado.data_evento).toLocaleString()}</p>
           <p>{eventoSelecionado.descricao}</p>
           
-          {/* TODO: Lógica de 'isInscrito' precisa ser implementada */}
           <motion.button 
-            className="btn-inscrever" 
-            onClick={() => handleInscricao(eventoSelecionado)}
-            {...buttonHoverTap}
+            className="btn-inscrever"
+            style={{ 
+                backgroundColor: isSelecionadoInscrito ? '#10B981' : '', 
+                cursor: isSelecionadoInscrito ? 'default' : 'pointer' 
+            }}
+            onClick={() => !isSelecionadoInscrito && handleInscricao(eventoSelecionado)}
+            disabled={isSelecionadoInscrito}
+            {...(!isSelecionadoInscrito ? buttonHoverTap : {})}
           >
-            Inscrever-se agora <ArrowRight size={16} />
+            {isSelecionadoInscrito ? (
+                <>Inscrito com sucesso <span style={{marginLeft: 8}}>✓</span></>
+            ) : (
+                <>Inscrever-se agora <ArrowRight size={16} /></>
+            )}
           </motion.button>
         </motion.div>
       ) : (
-        // Lista de Eventos
+        // === Lista de Eventos ===
         <motion.div 
           className="lista-eventos"
           variants={containerVariants}
           initial="hidden"
           animate="visible"
         >
-          <h2>Eventos Disponíveis</h2>
-          {eventos.map(evento => (
-            <motion.div 
-              key={evento.id} 
-              className="card-evento"
-              variants={itemVariants}
-              whileHover={{ y: -4 }}
-            >
-              <h3>{evento.nome}</h3>
-              <p><strong>Data:</strong> {new Date(evento.data_evento).toLocaleString()}</p>
-              <motion.button 
-                onClick={() => setEventoSelecionado(evento)}
+          {/* 3. CABEÇALHO FLEX (Título + Botão Admin) */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+            <h2 style={{ margin: 0 }}>Eventos Disponíveis</h2>
+            
+            {isAdmin && (
+              <motion.button
+                onClick={handleNovo}
+                // Estilos inline para garantir o visual bonito sem depender de classes quebradas
+                style={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: '8px', 
+                  padding: '10px 16px', 
+                  fontSize: '0.9rem',
+                  backgroundColor: '#4F46E5', // Cor roxa do tema
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontWeight: '600',
+                  boxShadow: '0 4px 6px -1px rgba(79, 70, 229, 0.2)'
+                }}
                 {...buttonHoverTap}
               >
-                Ver Detalhes
+                <Plus size={18} /> Novo Evento
               </motion.button>
-            </motion.div>
-          ))}
+            )}
+          </div>
+
+          {eventos.map(evento => {
+            const jaInscrito = inscricoesIds.has(evento.id);
+
+            return (
+                <motion.div 
+                  key={evento.id} 
+                  className="card-evento"
+                  variants={itemVariants}
+                  whileHover={{ y: -4 }}
+                >
+                  <h3>{evento.nome}</h3>
+                  <p><strong>Data:</strong> {new Date(evento.data_evento).toLocaleDateString()}</p>
+                  
+                  {jaInscrito && (
+                      <p style={{ color: '#10B981', fontWeight: 'bold', fontSize: '0.9rem', marginTop: '0.5rem' }}>
+                          ✓ Você já está inscrito
+                      </p>
+                  )}
+                  <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+                    <motion.button 
+                      onClick={() => setEventoSelecionado(evento)}
+                      {...buttonHoverTap}>Ver Detalhes
+                    </motion.button>
+                    {isAdmin && (
+                          <motion.button
+                              onClick={() => handleEditar(evento)}
+                              className="btn-secondary" // Pode criar essa classe ou usar inline
+                              style={{ 
+                                  backgroundColor: '#F3F4F6', 
+                                  color: '#4B5563', 
+                                  border: '1px solid #E5E7EB',
+                                  padding: '0 12px',
+                                  borderRadius: '6px',
+                                  cursor: 'pointer'
+                              }}
+                              title="Editar Evento"
+                              {...buttonHoverTap}
+                          >
+                              <Edit2 size={16} />
+                          </motion.button>
+                      )}
+                  </div>
+                </motion.div>
+            );
+          })}
         </motion.div>
       )}
     </>

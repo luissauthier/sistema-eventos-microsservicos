@@ -6,9 +6,9 @@
  * armazenados no banco local SQLite.
  *
  * Benefícios:
- *   - evita SQL espalhado pelos IPCs
- *   - garante consistência nos dados offline
- *   - permite testes unitários por função isolada
+ * - evita SQL espalhado pelos IPCs
+ * - garante consistência nos dados offline
+ * - permite testes unitários por função isolada
  */
 
 const { createLogger } = require("../logger");
@@ -21,15 +21,16 @@ module.exports = function EventsRepository(db) {
        CREATE/UPDATE — Registrar evento do servidor
        Usado no sync DOWNLOAD.
     ---------------------------------------------------- */
-    upsertFromServer(evento) {
+    async upsertFromServer(evento) {
       const { id, nome, data_evento, descricao } = evento;
 
       logger.info("event_upsert", { id_server: id, nome });
 
       try {
-        db.run(
+        // CORREÇÃO: A coluna no banco chama-se 'data_evento', não 'data'
+        await db.run(
           `
-            INSERT OR REPLACE INTO eventos (id_server, nome, data, descricao)
+            INSERT OR REPLACE INTO eventos (id_server, nome, data_evento, descricao)
             VALUES (?, ?, ?, ?)
           `,
           [
@@ -53,8 +54,8 @@ module.exports = function EventsRepository(db) {
     /* ---------------------------------------------------
        READ — Buscar evento por ID do servidor
     ---------------------------------------------------- */
-    getByServerId(id_server) {
-      return db.get(
+    async getByServerId(id_server) {
+      return await db.get(
         `
           SELECT * FROM eventos
           WHERE id_server = ?
@@ -67,12 +68,13 @@ module.exports = function EventsRepository(db) {
     /* ---------------------------------------------------
        READ — Listar todos os eventos
     ---------------------------------------------------- */
-    listAll() {
-      return db.all(
+    async listAll() {
+      // CORREÇÃO: order by data_evento
+      return await db.all(
         `
           SELECT *
           FROM eventos
-          ORDER BY data ASC
+          ORDER BY data_evento ASC
         `
       );
     },
@@ -81,13 +83,14 @@ module.exports = function EventsRepository(db) {
     /* ---------------------------------------------------
        READ — Buscar eventos futuros (qualidade extra)
     ---------------------------------------------------- */
-    listFuturos() {
-      return db.all(
+    async listFuturos() {
+      // CORREÇÃO: datetime(data_evento)
+      return await db.all(
         `
           SELECT *
           FROM eventos
-          WHERE datetime(data) >= datetime('now')
-          ORDER BY data ASC
+          WHERE datetime(data_evento) >= datetime('now')
+          ORDER BY data_evento ASC
         `
       );
     },
@@ -97,13 +100,14 @@ module.exports = function EventsRepository(db) {
        READ — Buscar eventos passados
        (opcional, mas útil para relatórios)
     ---------------------------------------------------- */
-    listPassados() {
-      return db.all(
+    async listPassados() {
+      // CORREÇÃO: datetime(data_evento)
+      return await db.all(
         `
           SELECT *
           FROM eventos
-          WHERE datetime(data) < datetime('now')
-          ORDER BY data DESC
+          WHERE datetime(data_evento) < datetime('now')
+          ORDER BY data_evento DESC
         `
       );
     }
