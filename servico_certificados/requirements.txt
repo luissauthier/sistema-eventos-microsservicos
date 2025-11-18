@@ -1,3 +1,11 @@
+# servico_certificados/requirements.txt
 fastapi
 uvicorn[standard]
+sqlalchemy
 psycopg2-binary
+python-jose[cryptography]
+pydantic[email]
+httpx
+fpdf
+pydantic
+python-json-logger

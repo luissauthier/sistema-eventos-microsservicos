@@ -15,4 +15,4 @@ RUN pip install --no-cache-dir --upgrade -r /app/requirements.txt
 COPY ./src /app
 
 # Comando para rodar a aplicação
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8002", "--reload"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]

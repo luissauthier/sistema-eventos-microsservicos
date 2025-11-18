@@ -1,241 +1,145 @@
 import React, { useState } from 'react';
 import './App.css';
+import logoNexstage from './logo_nexstage_sem_fundo.svg';
+import { LogOut, Sun, Moon, PlusCircle } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 
-// --- DADOS MOCKADOS (EVENTOS) ---
-const eventosFalsos = [
-  { id: 1, nome: "Hackathon de IA 2025", data: "2025-12-01", descricao: "Um evento incrível para desenvolver soluções com IA." },
-  { id: 2, nome: "Workshop de Microsserviços", data: "2025-11-20", descricao: "Aprenda a arquitetura que estamos usando neste projeto!" },
-  { id: 3, nome: "Palestra sobre Carreira Dev", data: "2025-11-25", descricao: "Dicas para alavancar sua carreira." }
-];
+import LoginPage from './components/LoginPage';
+import RegisterPage from './components/RegisterPage';
+import EventosPage from './components/EventosPage';
+import InscricoesPage from './components/InscricoesPage';
+import ProfilePage from './components/ProfilePage';
+import ValidateCertificatePage from './components/ValidateCertificatePage';
+import CriarEventoPage from './components/CriarEventoPage';
+import CheckinPage from './components/CheckinPage';
+
+const pageVariants = {
+  initial: { opacity: 0, y: 20 },
+  in: { opacity: 1, y: 0 },
+  out: { opacity: 0, y: -20 }
+};
+const pageTransition = {
+  type: "tween",
+  ease: "anticipate",
+  duration: 0.5
+};
+export const buttonHoverTap = {
+  whileHover: { scale: 1.03 },
+  whileTap: { scale: 0.98 }
+};
 
 function App() {
-  // --- NOSSOS ESTADOS GLOBAIS ---
-  const [authToken, setAuthToken] = useState(null);
-  
-  // Controle de Página Principal
-  // 'eventos', 'inscricoes', 'login', 'register'
-  const [pagina, setPagina] = useState('login'); 
-  
-  const [eventoSelecionado, setEventoSelecionado] = useState(null);
-  const [inscricoes, setInscricoes] = useState([]);
-  
-  // Estado para rastrear os check-ins (mockado)
-  // Vamos fingir que o usuário já fez check-in no evento 2
-  const [checkins, setCheckins] = useState([2]); 
+  const [authToken, setAuthToken] = useState(localStorage.getItem('access_token'));
+  // 2. ADICIONAR ESTADO PARA O OBJETO DO USUÁRIO
+  const [user, setUser] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('user') || 'null');
+    } catch {
+      return null;
+    }
+  });
 
-  // ---------------------------------
-  // --- MOCKS DAS FUNÇÕES DE API ---
-  // ---------------------------------
-
-  const handleLogin = (e) => {
-    e.preventDefault(); 
-    console.log("Mock: Usuário logado com sucesso!");
-    setAuthToken("um-token-jwt-falso-gerado-pelo-backend");
-    setPagina('eventos'); // Manda para a página de eventos
-  };
-
-  const handleRegister = (e) => {
-    e.preventDefault();
-    console.log("Mock: Usuário cadastrado com sucesso!");
-    setPagina('login'); // Manda para o login após o cadastro
-  };
+  const [eventoGerenciando, setEventoGerenciando] = useState(null);
+  const [pagina, setPagina] = useState(authToken ? 'eventos' : 'login'); 
+  const [eventoEditando, setEventoEditando] = useState(null);
+  const [theme, setTheme] = useState('light');
 
   const handleLogout = () => {
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('user'); // <<< 3. LIMPAR O USER NO LOGOUT
     setAuthToken(null);
-    setEventoSelecionado(null);
-    setInscricoes([]);
-    setCheckins([]); // Limpa os check-ins
-    setPagina('login'); // Manda para o login
-    console.log("Mock: Usuário deslogado.");
+    setUser(null); // <<< 3. LIMPAR O ESTADO DO USER
+    setPagina('login');
   };
 
-  const handleInscricao = (evento) => {
-    console.log(`Mock: Inscrito no evento ${evento.nome}`);
-    setInscricoes([...inscricoes, evento.id]);
+  const toggleTheme = () => {
+    setTheme(theme === 'light' ? 'dark' : 'light');
   };
 
-  const handleCancelarInscricao = (eventoId) => {
-    console.log(`Mock: Inscrição cancelada do evento ${eventoId}`);
-    setInscricoes(inscricoes.filter(id => id !== eventoId));
-  };
-
-  const isInscrito = (eventoId) => inscricoes.includes(eventoId);
-  
-  // Helper para verificar check-in
-  const hasCheckin = (eventoId) => checkins.includes(eventoId);
-  
-  // Helper para encontrar os objetos de evento
-  const getEventosInscritos = () => {
-    return eventosFalsos.filter(evento => inscricoes.includes(evento.id));
-  };
-
-  // ---------------------------------
   // --- RENDERIZAÇÃO DE TELAS ---
-  // ---------------------------------
-
-  // TELA DE LOGIN
-  const renderLoginPage = () => (
-    <div className="form-container">
-      <h2>Login</h2>
-      <form onSubmit={handleLogin}>
-        {/* ... (campos do formulário) ... */}
-        <div className="form-group">
-          <label>Email:</label>
-          <input type="email" placeholder="seu@email.com" required />
-        </div>
-        <div className="form-group">
-          <label>Senha:</label>
-          <input type="password" placeholder="••••••••" required />
-        </div>
-        <button type="submit" className="btn-primary">Entrar</button>
-        <p className="form-switch">
-          Não tem conta? 
-          <button onClick={() => setPagina('register')} className="btn-link">
-            Cadastre-se
-          </button>
-        </p>
-      </form>
-    </div>
-  );
-
-  // TELA DE CADASTRO
-  const renderRegisterPage = () => (
-    <div className="form-container">
-      <h2>Cadastro</h2>
-      <form onSubmit={handleRegister}>
-        {/* ... (campos do formulário) ... */}
-        <div className="form-group">
-          <label>Nome:</label>
-          <input type="text" placeholder="Seu nome completo" required />
-        </div>
-        <div className="form-group">
-          <label>Email:</label>
-          <input type="email" placeholder="seu@email.com" required />
-        </div>
-        <div className="form-group">
-          <label>Senha:</label>
-          <input type="password" placeholder="••••••••" required />
-        </div>
-        <button type="submit" className="btn-primary">Cadastrar</button>
-        <p className="form-switch">
-          Já tem conta? 
-          <button onClick={() => setPagina('login')} className="btn-link">
-            Faça login
-          </button>
-        </p>
-      </form>
-    </div>
-  );
-
-  // TELA DE EVENTOS (Lista ou Detalhes)
-  const renderEventosPage = () => (
-    <>
-      {eventoSelecionado ? (
-        // Detalhes do Evento
-        <div className="evento-detalhe">
-          <button onClick={() => setEventoSelecionado(null)} className="btn-voltar">
-            &larr; Voltar para a lista
-          </button>
-          <h2>{eventoSelecionado.nome}</h2>
-          <p><strong>Data:</strong> {eventoSelecionado.data}</p>
-          <p>{eventoSelecionado.descricao}</p>
-          
-          {isInscrito(eventoSelecionado.id) ? (
-            <button 
-              className="btn-cancelar" 
-              onClick={() => handleCancelarInscricao(eventoSelecionado.id)}
-            >
-              Cancelar Inscrição
-            </button>
-          ) : (
-            <button 
-              className="btn-inscrever" 
-              onClick={() => handleInscricao(eventoSelecionado)}
-            >
-              Inscrever-se
-            </button>
-          )}
-        </div>
-      ) : (
-        // Lista de Eventos
-        <div className="lista-eventos">
-          <h2>Eventos Disponíveis</h2>
-          {eventosFalsos.map(evento => (
-            <div key={evento.id} className="card-evento">
-              <h3>{evento.nome}</h3>
-              <p><strong>Data:</strong> {evento.data}</p>
-              <button onClick={() => setEventoSelecionado(evento)}>
-                Ver Detalhes
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-    </>
-  );
-
-  // TELA "MINHAS INSCRIÇÕES" (Mockup do Check-in)
-  const renderInscricoesPage = () => (
-    <div className="lista-inscricoes">
-      <h2>Minhas Inscrições</h2>
-      {getEventosInscritos().length === 0 ? (
-        <p>Você ainda não se inscreveu em nenhum evento.</p>
-      ) : (
-        getEventosInscritos().map(evento => (
-          <div key={evento.id} className="card-inscricao">
-            <h3>{evento.nome}</h3>
-            {/* Aqui está o mockup do check-in (item 10) */}
-            {hasCheckin(evento.id) ? (
-              <span className="status-checkin checkin-ok">
-                ✓ Presença Registrada
-              </span>
-            ) : (
-              <span className="status-checkin checkin-pendente">
-                Aguardando Check-in
-              </span>
-            )}
-            <button 
-              className="btn-cancelar-small"
-              onClick={() => handleCancelarInscricao(evento.id)}
-            >
-              Cancelar
-            </button>
-          </div>
-        ))
-      )}
-    </div>
-  );
-
-  // Função para renderizar a página principal correta
   const renderPaginaPrincipal = () => {
+    // Páginas Públicas (Não Logado)
     if (!authToken) {
-      if (pagina === 'login') return renderLoginPage();
-      if (pagina === 'register') return renderRegisterPage();
+      if (pagina === 'login') return (
+        <motion.div key="login" variants={pageVariants} initial="initial" animate="in" exit="out" transition={pageTransition}>
+          {/* 4. PASSAR O setUser PARA O LOGIN */}
+          <LoginPage setPagina={setPagina} setAuthToken={setAuthToken} setUser={setUser} />
+        </motion.div>
+      );
+      if (pagina === 'register') return (
+        <motion.div key="register" variants={pageVariants} initial="initial" animate="in" exit="out" transition={pageTransition}>
+          <RegisterPage setPagina={setPagina} />
+        </motion.div>
+      );
+      if (pagina === 'validar') return (
+        <motion.div key="validar" variants={pageVariants} initial="initial" animate="in" exit="out" transition={pageTransition}>
+          <ValidateCertificatePage setPagina={setPagina} />
+        </motion.div>
+      );
     }
     
+    // Páginas Protegidas (Logado)
     if (authToken) {
-      if (pagina === 'eventos') return renderEventosPage();
-      if (pagina === 'inscricoes') return renderInscricoesPage();
+      if (pagina === 'eventos') return (
+        <motion.div key="eventos" variants={pageVariants} initial="initial" animate="in" exit="out" transition={pageTransition}>
+          {/* 5. PASSAR 'user' e 'setPagina' PARA EVENTOS */}
+          <EventosPage user={user} 
+            setPagina={setPagina} 
+            setEventoEditando={setEventoEditando} 
+            setEventoGerenciando={setEventoGerenciando}
+          />
+        </motion.div>
+      );
+      if (pagina === 'inscricoes') return (
+        <motion.div key="inscricoes" variants={pageVariants} initial="initial" animate="in" exit="out" transition={pageTransition}>
+          <InscricoesPage />
+        </motion.div>
+      );
+      if (pagina === 'perfil') return (
+        <motion.div key="perfil" variants={pageVariants} initial="initial" animate="in" exit="out" transition={pageTransition}>
+          <ProfilePage />
+        </motion.div>
+      );
+      // 6. ADICIONAR A ROTA DE CRIAR EVENTO (SÓ PODE ACESSAR SE FOR ADMIN)
+      if (pagina === 'criar-evento' && user && user.is_admin) return (
+        <motion.div key="criar-evento" variants={pageVariants} initial="initial" animate="in" exit="out" transition={pageTransition}>
+          <CriarEventoPage 
+             setPagina={setPagina} 
+             eventoEditando={eventoEditando} 
+          />
+        </motion.div>
+      );
+      if (pagina === 'checkin-qr' && user && user.is_admin) return ( // <<< NOVA ROTA
+        <motion.div key="checkin-qr" variants={pageVariants} initial="initial" animate="in" exit="out" transition={pageTransition}>
+          <CheckinPage 
+            setPagina={setPagina} 
+            evento={eventoGerenciando} // Passa o objeto do evento
+          />
+        </motion.div>
+      );
     }
-
-    return renderLoginPage(); // Fallback
+    
+    // Fallback
+    return (
+      <motion.div key="login-fallback" variants={pageVariants} initial="initial" animate="in" exit="out" transition={pageTransition}>
+        <LoginPage setPagina={setPagina} setAuthToken={setAuthToken} setUser={setUser} />
+      </motion.div>
+    );
   };
 
   // --- COMPONENTE PRINCIPAL ---
   return (
-    <div className="App">
+    <div className={`App ${theme}`}>
       <header className="App-header">
-        <h1>Portal de Eventos</h1>
         
-        {/* Navegação principal (só aparece logado) */}
+        <img src={logoNexstage} alt="Nexstage Logo" className="App-logo" />
+        
         {authToken && (
+          // --- NAV LOGADA ---
           <nav className="main-nav">
             <button 
               className={pagina === 'eventos' ? 'active' : ''}
-              onClick={() => {
-                setPagina('eventos');
-                setEventoSelecionado(null); // Reseta a seleção
-              }}
+              onClick={() => setPagina('eventos')}
             >
               Eventos
             </button>
@@ -245,18 +149,63 @@ function App() {
             >
               Minhas Inscrições
             </button>
+            <button 
+              className={pagina === 'perfil' ? 'active' : ''}
+              onClick={() => setPagina('perfil')}
+            >
+              Meu Perfil
+            </button>
+            
+            {/* 7. BOTÃO DE ADMIN (SÓ APARECE SE user.is_admin === true) */}
+            {user && user.is_admin && (
+              <button 
+                className={pagina === 'criar-evento' ? 'active-admin' : 'btn-admin'}
+                onClick={() => setPagina('criar-evento')}
+              >
+                <PlusCircle size={16} />
+                Novo Evento
+              </button>
+            )}
+          </nav>
+        )}
+        
+        {!authToken && (
+           // --- NAV PÚBLICA (BOTÃO DE VALIDAR) ---
+          <nav className="main-nav">
+             <button 
+              className={pagina === 'validar' ? 'active' : ''}
+              onClick={() => setPagina('validar')}
+            >
+              Validar Certificado
+            </button>
           </nav>
         )}
 
-        {authToken && (
-          <button onClick={handleLogout} className="btn-logout">
-            Sair (Logout)
-          </button>
-        )}
+        <div className="header-actions">
+          <motion.button 
+            onClick={toggleTheme} 
+            className="theme-toggle"
+            whileTap={{ scale: 0.9, rotate: 15 }}
+          >
+            {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
+          </motion.button>
+          
+          {authToken && (
+            <motion.button 
+              onClick={handleLogout} 
+              className="btn-logout"
+              {...buttonHoverTap}
+            >
+              <LogOut size={16} /> Sair
+            </motion.button>
+          )}
+        </div>
       </header>
       
       <div className="conteudo">
-        {renderPaginaPrincipal()}
+        <AnimatePresence mode="wait">
+          {renderPaginaPrincipal()}
+        </AnimatePresence>
       </div>
     </div>
   );
