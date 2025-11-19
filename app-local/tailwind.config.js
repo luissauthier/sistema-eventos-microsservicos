@@ -1,53 +1,76 @@
-// tailwind.config.js
-
-const { fontFamily } = require("tailwindcss/defaultTheme");
-
+/** @type {import('tailwindcss').Config} */
 module.exports = {
-  darkMode: ["class"], // Você controla adicionando .dark no body
+  darkMode: ["class"],
   content: [
-    "./renderer/**/*.{js,jsx,ts,tsx}",
-    "./preload.js",
-    "./main/**/*.{js}",
-    "./index.html"
+    // CORREÇÃO: Apontar para onde seu HTML e React realmente estão
+    "./src/renderer/index.html",
+    "./src/renderer/**/*.{js,ts,jsx,tsx}",
   ],
   theme: {
+    container: {
+      center: true,
+      padding: "2rem",
+      screens: {
+        "2xl": "1400px",
+      },
+    },
     extend: {
-      fontFamily: {
-        sans: ["Inter", ...fontFamily.sans],
-      },
-
+      // Configuração de cores para Shadcn/UI (usa variáveis CSS)
       colors: {
-        // Integração com o theme.css via CSS variables
-        bg: "var(--bg)",
-        "bg-soft": "var(--bg-soft)",
-        "bg-card": "var(--bg-card)",
-
-        border: "var(--border)",
-        text: "var(--text)",
-        "text-muted": "var(--text-muted)",
-
-        primary: "var(--primary)",
-        "primary-hover": "var(--primary-hover)",
-        "primary-soft": "var(--primary-soft)",
-
-        success: "var(--success)",
-        "success-soft": "var(--success-soft)",
-
-        danger: "var(--danger)",
-        "danger-soft": "var(--danger-soft)",
-
-        warning: "var(--warning)",
-        "warning-soft": "var(--warning-soft)",
+        border: "hsl(var(--border))",
+        input: "hsl(var(--input))",
+        ring: "hsl(var(--ring))",
+        background: "hsl(var(--background))",
+        foreground: "hsl(var(--foreground))",
+        primary: {
+          DEFAULT: "hsl(var(--primary))",
+          foreground: "hsl(var(--primary-foreground))",
+        },
+        secondary: {
+          DEFAULT: "hsl(var(--secondary))",
+          foreground: "hsl(var(--secondary-foreground))",
+        },
+        destructive: {
+          DEFAULT: "hsl(var(--destructive))",
+          foreground: "hsl(var(--destructive-foreground))",
+        },
+        muted: {
+          DEFAULT: "hsl(var(--muted))",
+          foreground: "hsl(var(--muted-foreground))",
+        },
+        accent: {
+          DEFAULT: "hsl(var(--accent))",
+          foreground: "hsl(var(--accent-foreground))",
+        },
+        popover: {
+          DEFAULT: "hsl(var(--popover))",
+          foreground: "hsl(var(--popover-foreground))",
+        },
+        card: {
+          DEFAULT: "hsl(var(--card))",
+          foreground: "hsl(var(--card-foreground))",
+        },
       },
-
       borderRadius: {
-        base: "var(--radius)",
+        lg: "var(--radius)",
+        md: "calc(var(--radius) - 2px)",
+        sm: "calc(var(--radius) - 4px)",
       },
-
-      boxShadow: {
-        soft: "0px 4px 12px var(--shadow)",
-      }
+      keyframes: {
+        "accordion-down": {
+          from: { height: "0" },
+          to: { height: "var(--radix-accordion-content-height)" },
+        },
+        "accordion-up": {
+          from: { height: "var(--radix-accordion-content-height)" },
+          to: { height: "0" },
+        },
+      },
+      animation: {
+        "accordion-down": "accordion-down 0.2s ease-out",
+        "accordion-up": "accordion-up 0.2s ease-out",
+      },
     },
   },
-    plugins: [require("tailwindcss-animate")],
-};
+  plugins: [require("tailwindcss-animate")],
+}

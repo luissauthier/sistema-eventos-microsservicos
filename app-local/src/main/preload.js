@@ -130,4 +130,31 @@ Object.freeze(api.offline);
  *  EXPOR NO CONTEXTO GLOBAL DE FORMA SEGURA
  * ============================================================
  */
-contextBridge.exposeInMainWorld("api", api);
+contextBridge.exposeInMainWorld('api', {
+  // Canal de Logs (opcional, para debug)
+  log: (msg) => ipcRenderer.send('log-message', msg),
+
+  // --- ONLINE (Conectado ao Python/Docker) ---
+  online: {
+    login: (username, password) => ipcRenderer.invoke('login', username, password),
+    logout: () => ipcRenderer.send('logout'),
+    
+    sincronizarDownload: () => ipcRenderer.invoke('sincronizar-download'),
+    sincronizarUpload: () => ipcRenderer.invoke('sincronizar-upload'),
+  },
+
+  // --- OFFLINE (Banco de Dados SQLite Local) ---
+  offline: {
+    buscarDadosLocais: () => ipcRenderer.invoke('buscar-dados-locais'),
+    
+    // Cadastros e Check-ins
+    cadastrarUsuarioLocal: (dados) => ipcRenderer.invoke('cadastrar-usuario-local', dados),
+    inscreverLocal: (dados) => ipcRenderer.invoke('inscrever-local', dados),
+    registrarPresencaLocal: (id) => ipcRenderer.invoke('registrar-presenca-local', id),
+    cancelarCheckinLocal: (id) => ipcRenderer.invoke('cancelar-checkin-local', id),
+    cancelarInscricaoLocal: (id) => ipcRenderer.invoke('cancelar-inscricao-local', id),
+  },
+
+  // --- NOVO MÉTODO ATÔMICO (Do Caso 2) ---
+  realizarCheckinRapido: (dados) => ipcRenderer.invoke('realizar-checkin-rapido', dados),
+});

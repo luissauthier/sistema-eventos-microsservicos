@@ -202,6 +202,7 @@ def meus_certificados(
     db: Session = Depends(get_db),
     user=Depends(get_current_user)
 ):
+    
     return db.query(models.Certificado).filter_by(
         usuario_id=user.id
     ).all()
