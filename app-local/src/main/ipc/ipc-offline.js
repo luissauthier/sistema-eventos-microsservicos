@@ -11,6 +11,7 @@
 
 const { ipcMain } = require("electron");
 const { createLogger } = require("../logger");
+const { generateTempPassword } = require("../../../utils/password-gen");
 
 const logger = createLogger("ipc-offline");
 
@@ -116,13 +117,92 @@ module.exports = function registerOfflineHandlers(db) {
   });
 
   /* ---------------------------------------------------
+   OFFLINE SUPER — Fluxo Completo de Check-in Rápido
+   Cria usuário -> Inscreve -> Marca Presença
+   Tudo em uma transação só. Essencial para o Caso 2.
+  ---------------------------------------------------- */
+  ipcMain.handle("realizar-checkin-rapido", async (event, payload) => {
+    const { nome, email, eventoIdServer } = payload; // Senha pode ser gerada auto ou vazia p/ completar depois
+    
+    logger.info("checkin_rapido_start", { email, eventoIdServer });
+
+    let tx;
+    let senhaGerada = null;
+    try {
+      tx = await db.transactionStart();
+
+      // 1. Criar Usuário (ou buscar se já existe localmente por email)
+      // Nota: Se existir, pegamos o ID. Se não, criamos.
+      let usuarioIdLocal;
+      const usuarioExistente = await db.get("SELECT id_local FROM usuarios WHERE email = ?", [email]);
+      
+      if (usuarioExistente) {
+        usuarioIdLocal = usuarioExistente.id_local;
+      } else {
+        senhaGerada = generateTempPassword(); 
+        const resUser = await db.run(
+          `INSERT INTO usuarios (nome, email, senha, sincronizado) VALUES (?, ?, ?, 0)`,
+          [nome, email, senhaGerada]
+        );
+        usuarioIdLocal = resUser.lastID;
+      }
+
+      // 2. Criar Inscrição
+      // Verifica se já não está inscrito para evitar duplicação
+      let inscricaoIdLocal;
+      const inscricaoExistente = await db.get(
+        "SELECT id_local FROM inscricoes WHERE usuario_id_local = ? AND evento_id_server = ?", 
+        [usuarioIdLocal, eventoIdServer]
+      );
+
+      if (inscricaoExistente) {
+        inscricaoIdLocal = inscricaoExistente.id_local;
+      } else {
+        const resInsc = await db.run(
+          `INSERT INTO inscricoes (usuario_id_local, evento_id_server, sincronizado) VALUES (?, ?, 0)`,
+          [usuarioIdLocal, eventoIdServer]
+        );
+        inscricaoIdLocal = resInsc.lastID;
+      }
+
+      // 3. Registrar Presença
+      // Verifica se já tem presença
+      const presencaExistente = await db.get(
+        "SELECT id_local FROM presencas WHERE inscricao_id_local = ?", 
+        [inscricaoIdLocal]
+      );
+
+      if (!presencaExistente) {
+        await db.run(
+          `INSERT INTO presencas (inscricao_id_local, sincronizado) VALUES (?, 0)`,
+          [inscricaoIdLocal]
+        );
+      }
+
+      await db.transactionCommit(tx);
+      
+      logger.info("checkin_rapido_success", { email });
+      return { 
+        success: true, 
+        message: "Check-in realizado com sucesso!",
+        senhaTemp: senhaGerada
+      };
+
+    } catch (err) {
+      logger.error("checkin_rapido_error", { error: err.message });
+      if (tx) await db.transactionRollback(tx);
+      return { success: false, message: "Erro ao realizar check-in rápido: " + err.message };
+    }
+  });
+
+  /* ---------------------------------------------------
      OFFLINE 4 — Buscar Dados Locais
   ---------------------------------------------------- */
   ipcMain.handle("buscar-dados-locais", async () => {
     logger.info("local_data_query");
 
     try {
-      // CORREÇÃO: Ordenar por data_evento (e não 'data')
+      const usuarios = await db.all(`SELECT * FROM usuarios`);
       const eventos = await db.all(`SELECT * FROM eventos ORDER BY data_evento`);
       const presencas = await db.all(`SELECT * FROM presencas`);
 
@@ -152,11 +232,43 @@ module.exports = function registerOfflineHandlers(db) {
         success: true,
         eventos,
         inscricoes,
-        presencas,
+        presencas, 
+        usuarios
       };
 
     } catch (err) {
       logger.error("local_data_query_error", { error: err.message });
+      return { success: false, message: err.message };
+    }
+  });
+
+  /* ---------------------------------------------------
+     OFFLINE 5 — Cancelar Check-in (Remover Presença)
+  ---------------------------------------------------- */
+  ipcMain.handle("cancelar-checkin-local", async (event, inscricaoIdLocal) => {
+    logger.info("cancelar_checkin_attempt", { inscricaoIdLocal });
+    try {
+      // Remove apenas a presença, mantém a inscrição
+      await db.run("DELETE FROM presencas WHERE inscricao_id_local = ?", [inscricaoIdLocal]);
+      return { success: true };
+    } catch (err) {
+      return { success: false, message: err.message };
+    }
+  });
+
+  /* ---------------------------------------------------
+     OFFLINE 6 — Cancelar Inscrição (Remover Tudo)
+  ---------------------------------------------------- */
+  ipcMain.handle("cancelar-inscricao-local", async (event, inscricaoIdLocal) => {
+    logger.info("cancelar_inscricao_attempt", { inscricaoIdLocal });
+    try {
+      // Remove presença primeiro (cascade manual se o sqlite não tiver FK ativada)
+      await db.run("DELETE FROM presencas WHERE inscricao_id_local = ?", [inscricaoIdLocal]);
+      // Remove inscrição
+      await db.run("DELETE FROM inscricoes WHERE id_local = ?", [inscricaoIdLocal]);
+      
+      return { success: true };
+    } catch (err) {
       return { success: false, message: err.message };
     }
   });

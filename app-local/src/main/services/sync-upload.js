@@ -38,6 +38,7 @@ module.exports = function createSyncUploadService(db) {
    */
   async function syncUpload(token) {
     logger.info("sync_upload_start");
+    const results = { users: { ok: 0, fail: 0 }, subs: { ok: 0, fail: 0 }, checks: { ok: 0, fail: 0 } };
 
     let tx;
     try {
@@ -63,16 +64,33 @@ module.exports = function createSyncUploadService(db) {
       // 1) Sync USERS
       // ---------------------------------------------------------
       for (const u of unsyncedUsers) {
-        logger.info("sync_upload_user", { id_local: u.id_local });
-
-        const apiResp = await api.createUserAdmin(
-          token,
-          u.nome,
-          u.email,
-          u.senha
-        );
-
-        users.markAsSynced(u.id_local, apiResp.id);
+        try {
+          // Tenta criar na API
+          const apiResp = await api.createUserAdmin(token, u.nome, u.email, u.senha);
+          await users.markAsSynced(u.id_local, apiResp.id);
+          results.users.ok++;
+        } catch (err) {
+          // Tratamento especial: Se o erro for "Email already registered" (400 ou 409 dependendo da sua API Python)
+          // Devemos buscar o user na API e atualizar o ID local para não travar o sistema.
+          if (err.response && (err.response.status === 409 || err.response.data.detail?.includes("exist"))) {
+              logger.warn("sync_upload_user_conflict", { email: u.email });
+              try {
+                  // Fallback: Busca o usuário remoto para pegar o ID correto
+                  const remoteUser = await api.getUserByEmail(token, u.email); // Necessário criar este método na api.js
+                  if (remoteUser) {
+                      await users.markAsSynced(u.id_local, remoteUser.id);
+                      results.users.ok++;
+                      continue; // Recuperado com sucesso
+                  }
+              } catch (recoveryErr) {
+                  logger.error("sync_user_recovery_fail", { error: recoveryErr.message });
+              }
+          }
+          
+          logger.error("sync_upload_user_fail", { id: u.id_local, error: err.message });
+          results.users.fail++;
+          // Não damos throw aqui para permitir que outros registros tentem subir
+        }
       }
 
       // ---------------------------------------------------------

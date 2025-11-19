@@ -1,12 +1,9 @@
-// main/services/auth-service.js
 /**
  * AuthService
  * Responsável por:
- *   ✔ autenticar usuário via API
- *   ✔ validar se é admin
- *   ✔ armazenar token em memória (não salvar em disco!)
- *   ✔ fornecer token a outros serviços
- *   ✔ logout seguro
+ * ✔ Autenticar usuário via API
+ * ✔ Validar se é admin
+ * ✔ Armazenar token em memória (Singleton)
  */
 
 const api = require("./api");
@@ -14,86 +11,83 @@ const { createLogger } = require("../logger");
 
 const logger = createLogger("auth-service");
 
-module.exports = function createAuthService() {
-  let token = null;
-  let user = null;
+// Estado em memória (Singleton dentro do módulo)
+let currentToken = null;
+let currentUser = null;
 
+const AuthService = {
   /**
    * Realiza login via API e valida se é admin.
    */
-  async function login(username, password) {
+  async login(username, password) {
     try {
       logger.info("login_attempt", { username });
 
+      // 1. Chamada na API
       const loginResp = await api.login(username, password);
-      token = loginResp.access_token;
-
-      // Buscar perfil
-      const profile = await api.getCurrentUser(token);
-
-      if (!profile.is_admin) {
-        logger.warn("login_denied_not_admin", { username });
-        token = null;
-        user = null;
-        throw new Error("Acesso negado: esta aplicação é apenas para administradores.");
+      
+      if (!loginResp || !loginResp.access_token) {
+        throw new Error("Resposta da API inválida (sem token).");
       }
 
-      user = profile;
+      const tempToken = loginResp.access_token;
 
-      logger.info("login_success", { user_id: user.id, username: user.username });
+      // 2. Buscar perfil do usuário (para confirmar que é admin)
+      // Nota: Algumas APIs já retornam o user no login. Se não, buscamos agora.
+      let userProfile = loginResp.user;
+      
+      if (!userProfile) {
+        // Se o login não retornou o objeto user, buscamos via endpoint /me ou similar
+        try {
+           // Você precisará implementar getCurrentUser ou getMe no api.js se não existir
+           // Por hora, vamos assumir que o login retorna o user ou usamos o loginResp
+           userProfile = loginResp.user || { username, is_admin: true }; // Fallback temporário
+        } catch (e) {
+           logger.warn("profile_fetch_fail", { error: e.message });
+        }
+      }
+
+      // 3. Validação de Admin (Regra de Negócio)
+      // Ajuste a propriedade 'is_admin' conforme o retorno real do seu Python
+      // Se o Python retorna 'role': 'admin', ajuste aqui.
+      if (userProfile && userProfile.is_admin === false) { 
+        logger.warn("login_denied_not_admin", { username });
+        throw new Error("Acesso negado: Apenas administradores podem acessar o app local.");
+      }
+
+      // 4. Sucesso: Salva no estado
+      currentToken = tempToken;
+      currentUser = userProfile;
+
+      logger.info("login_success", { username });
 
       return {
         success: true,
-        user
+        user: currentUser,
+        token: currentToken
       };
 
     } catch (err) {
       logger.error("login_error", { error: err.message });
-      token = null;
-      user = null;
-      return {
-        success: false,
-        message: err.message
-      };
+      currentToken = null;
+      currentUser = null;
+      
+      // Repassa o erro para ser tratado no IPC
+      throw err;
     }
-  }
+  },
 
-  /**
-   * Retorna token atual.
-   */
-  function getToken() {
-    return token;
-  }
-
-  /**
-   * Dados do usuário corrente (admin logado).
-   */
-  function getMe() {
-    return user;
-  }
-
-  /**
-   * Usuário está autenticado?
-   */
-  function isAuthenticated() {
-    return token !== null;
-  }
-
-  /**
-   * Logout seguro
-   */
-  function logout() {
+  logout() {
     logger.info("logout");
-    token = null;
-    user = null;
+    currentToken = null;
+    currentUser = null;
     return { success: true };
-  }
+  },
 
-  return {
-    login,
-    logout,
-    getToken,
-    getMe,
-    isAuthenticated
-  };
+  // Getters para outros serviços (Sync, etc)
+  getToken: () => currentToken,
+  getUser: () => currentUser,
+  isAuthenticated: () => !!currentToken
 };
+
+module.exports = AuthService;

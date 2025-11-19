@@ -1,94 +1,73 @@
-// main/main.js
-/**
- * Processo Principal (Main) — App Local
- * Arquitetura Profissional + Segurança Máxima
- */
+// app-local/src/main/main.js
+const { app, BrowserWindow, ipcMain } = require('electron');
+const path = require('node:path');
+const { createDatabase } = require('./db/db');
 
-const { app, BrowserWindow } = require("electron");
-const path = require("node:path");
+// Importa os manipuladores (Handlers)
+const registerAuthHandlers = require('./ipc/ipc-auth');
+const registerOfflineHandlers = require('./ipc/ipc-offline');
+const registerSyncHandlers = require('./ipc/ipc-sync');
 
-const { createLogger } = require("./logger");
-const { createDatabase } = require("./db/db");
-const { initIPC } = require("./ipc/index");
-const { secureWindowConfig } = require("./security");
-
-const logger = createLogger("main");
-
-// Remove comportamento padrão do Squirrel no Windows
-if (require("electron-squirrel-startup")) {
+// Handle creating/removing shortcuts on Windows when installing/uninstalling.
+if (require('electron-squirrel-startup')) {
   app.quit();
 }
 
-// ============================================================
-//  FUNÇÃO: Criar janela principal com máxima segurança
-// ============================================================
+let dbInstance = null;
 
-function createMainWindow() {
-  const win = new BrowserWindow({
+const createWindow = () => {
+  const mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
-    ...secureWindowConfig,
-    show: true,
-
     webPreferences: {
-      preload: path.join(__dirname, "preload.js"),
-      contextIsolation: true,
-      sandbox: true,
-      nodeIntegration: false,
-      enableRemoteModule: false,
-      devTools: process.env.NODE_ENV === "development",
+      preload: path.join(__dirname, 'preload.js'),
+      nodeIntegration: false, // Segurança: Mantenha false
+      contextIsolation: true, // Segurança: Mantenha true
     },
   });
 
-  win.webContents.openDevTools();
+  // Carrega a interface (Vite)
+  const devServerUrl = typeof MAIN_WINDOW_VITE_DEV_SERVER_URL !== 'undefined' ? MAIN_WINDOW_VITE_DEV_SERVER_URL : null;
+  const viteName = typeof MAIN_WINDOW_VITE_NAME !== 'undefined' ? MAIN_WINDOW_VITE_NAME : 'main_window';
 
-  const devServer = process.env.VITE_DEV_SERVER_URL;
-
-  // Load do React/Vite
-  if (devServer) {
-    win.loadURL(devServer);
+  if (devServerUrl) {
+    mainWindow.loadURL(devServerUrl);
+    mainWindow.webContents.openDevTools(); // Abre DevTools para debug
   } else {
-    win.loadFile(path.join(__dirname, "../renderer/index.html"));
+    // Em produção, carrega o arquivo local
+    mainWindow.loadFile(path.join(__dirname, `../renderer/index.html`));
+  }
+};
+
+app.on('ready', async () => {
+  // 1. Inicia Banco de Dados
+  try {
+    dbInstance = await createDatabase(app);
+    console.log("✅ Banco de Dados Local Iniciado.");
+  } catch (err) {
+    console.error("❌ Erro fatal no Banco de Dados:", err);
   }
 
-  logger.info("window_loaded");
-}
+  // 2. REGISTRA OS HANDLERS IPC (AQUI ESTÁ O SEGREDO!)
+  // Precisamos passar a instância do DB para eles
+  registerAuthHandlers(); 
+  registerOfflineHandlers(dbInstance);
+  registerSyncHandlers(dbInstance);
 
-// ============================================================
-//  APLICAÇÃO PRINCIPAL
-// ============================================================
+  // Handler auxiliar de log vindo do front
+  ipcMain.on('log-message', (_, msg) => console.log("[RENDERER]:", msg));
 
-app.whenReady().then(async () => {
-  try {
-    logger.info("app_starting");
+  createWindow();
+});
 
-    // 1) Inicializar banco SQLite
-    const db = await createDatabase(app);
-    logger.info("database_initialized");
-    // 2) Registrar IPCs (agora passando o DB)
-    initIPC(db);
-    logger.info("ipc_handlers_registered");
-
-    // 3) Criar janela seguro
-    createMainWindow();
-
-    // 4) Manter comportamento no macOS
-    app.on("activate", () => {
-      if (BrowserWindow.getAllWindows().length === 0) createMainWindow();
-    });
-  } catch (err) {
-    logger.error("app_initialization_error", { error: err.message });
+app.on('window-all-closed', () => {
+  if (process.platform !== 'darwin') {
     app.quit();
   }
 });
 
-// ============================================================
-//  Encerramento seguro
-// ============================================================
-
-app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") {
-    logger.info("app_closed");
-    app.quit();
+app.on('activate', () => {
+  if (BrowserWindow.getAllWindows().length === 0) {
+    createWindow();
   }
 });
