@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List
 from datetime import datetime
 from models import InscricaoStatus, PresencaOrigem
+from uuid import UUID
 
 
 # ============================================================
@@ -215,6 +216,22 @@ class CheckinQRCodeResult(BaseModel):
     message: str
     inscricao_id: int
     presenca_registrada: bool = False
+
+    class Config:
+        from_attributes = True
+
+class TokenAndUserCheckin(BaseModel):
+    """Payload para validação do token e registro de presença."""
+    token: UUID
+    # O app local precisará saber qual usuário está fazendo o check-in.
+    user_id: int = Field(..., description="ID do usuário que está fazendo o check-in.")
+
+class PresencaResponse(BaseModel):
+    """Esquema de resposta simplificado para confirmação da presença."""
+    id: int
+    inscricao_id: int
+    data_registro: datetime
+    status: str = Field(..., description="Mensagem de status do check-in.")
 
     class Config:
         from_attributes = True

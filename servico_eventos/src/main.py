@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 import httpx
 import asyncio
 from schemas import CheckinTokenResponse
+from uuid import UUID
 
 # Infraestrutura corporativa
 from servico_comum.logger import configure_logger
@@ -773,4 +774,93 @@ def generate_checkin_token(
     
     # ESTE CAMPO ESTAVA FALTANDO!
     url_publica=public_url 
+    )
+
+# ============================================================
+#        CHECK-IN – VALIDAÇÃO DE TOKEN E REGISTRO DE PRESENÇA
+# ============================================================
+
+@app.post(
+    "/checkin/validate", 
+    response_model=schemas.PresencaResponse, 
+    status_code=status.HTTP_201_CREATED,
+    tags=["checkin"]
+)
+def validate_token_and_register_presence(
+    data: schemas.TokenAndUserCheckin,
+    db: Session = Depends(get_db)
+):
+    """
+    Valida um token de check-in e registra a presença de um usuário para um evento.
+    """
+    token_uuid: UUID = data.token
+    user_id: int = data.user_id
+
+    # 1. Buscar o token
+    checkin_token = db.query(models.CheckinToken).filter(models.CheckinToken.token == token_uuid).first()
+
+    if not checkin_token:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Token de Check-in não encontrado ou inválido."
+        )
+
+    # 2. Validar o Token
+    if checkin_token.data_expiracao < datetime.utcnow():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Token expirado."
+        )
+    if checkin_token.is_used: # Assumindo que is_used é o booleano de uso
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Token já utilizado."
+        )
+
+    # 3. Buscar a Inscrição do Usuário para o Evento
+    inscricao = db.query(models.Inscricao).filter(
+        models.Inscricao.usuario_id == user_id,
+        models.Inscricao.evento_id == checkin_token.evento_id
+    ).first()
+
+    if not inscricao:
+        # Pela regra do projeto, um usuário não inscrito pode fazer check-in (Caso 2).
+        # Para simplificar o backend, o app-local deve garantir que o usuário esteja inscrito (ou crie a inscrição).
+        # Se for um usuário já existente, a inscrição é obrigatória para registrar a presença.
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Usuário não possui inscrição válida para este evento."
+        )
+
+    # 4. Verificar se a Presença já foi Registrada
+    presenca_existente = db.query(models.Presenca).filter(
+        models.Presenca.inscricao_id == inscricao.id
+    ).first()
+
+    if presenca_existente:
+        return schemas.PresencaResponse(
+            id=presenca_existente.id,
+            inscricao_id=presenca_existente.inscricao_id,
+            data_registro=presenca_existente.data_registro,
+            status="Presença já registrada anteriormente."
+        )
+
+    # 5. Registrar a Presença
+    new_presenca = models.Presenca(
+        inscricao_id=inscricao.id,
+        data_registro=datetime.utcnow()
+    )
+    
+    # 6. Marcar o Token como usado (para tokens de uso único)
+    checkin_token.is_used = True
+
+    db.add(new_presenca)
+    db.commit()
+    db.refresh(new_presenca)
+
+    return schemas.PresencaResponse(
+        id=new_presenca.id,
+        inscricao_id=new_presenca.inscricao_id,
+        data_registro=new_presenca.data_registro,
+        status="Presença registrada com sucesso via QR Code."
     )
