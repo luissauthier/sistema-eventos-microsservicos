@@ -141,7 +141,7 @@ function InscricoesPage() {
               
               {/* === LÓGICA DE TAGS DE STATUS === */}
               {status === 'cancelada' ? (
-                <span className="status-checkin" style={{backgroundColor: '#E5E7EB', color: '#4B5563', borderColor: '#D1D5DB'}}>
+                <span className="status-checkin" style={{color: '#4B5563', borderColor: '#D1D5DB'}}>
                   <AlertTriangle size={16} /> Inscrição Cancelada
                 </span>
               ) : hasCheckin ? (

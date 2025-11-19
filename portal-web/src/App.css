@@ -23,7 +23,8 @@
 }
 
 .App-logo {
-  height: 32px; /* Ajuste a altura do logo conforme necessário */
+  height: 64px; /* Ajuste a altura do logo conforme necessário */
+  color: #1A1A1A;
 }
 
 /* --- NAVEGAÇÃO PRINCIPAL (HEADER) --- */
@@ -44,6 +45,9 @@
   padding: var(--space-2) var(--space-3); /* 8px 12px */
   border-bottom: 3px solid transparent;
   transition: var(--transition);
+  display: flex;
+  align-items: center;
+  column-gap: 4px;
 }
 .main-nav button:hover {
   color: var(--text-primary);
@@ -117,6 +121,53 @@
   margin-bottom: var(--space-6);
   color: var(--text-primary);
   transition: color var(--transition);
+}
+
+/* --- Inputs com ícone à esquerda (CriarEventoPage) --- */
+.input-with-icon {
+  position: relative;
+}
+
+.input-left-icon {
+  position: absolute;
+  top: 50%;
+  left: 12px;
+  transform: translateY(-50%);
+  color: var(--text-secondary);
+  pointer-events: none;
+}
+
+/* Quando for textarea, o ícone fica um pouco mais acima */
+.textarea-wrapper .input-left-icon {
+  top: 18px;
+}
+
+/* Reaproveita o estilo dos inputs também para textarea e select */
+.form-group textarea,
+.form-group select {
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-sm);
+  font-size: var(--fs-body);
+  transition: var(--transition);
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  resize: vertical;
+}
+
+/* Ajusta padding quando tem ícone à esquerda */
+.input-with-icon input,
+.input-with-icon textarea {
+  padding-left: 40px; /* espaço para o ícone */
+}
+
+/* Focus para textarea/select também */
+.form-group textarea:focus,
+.form-group select:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-light);
 }
 
 .form-group {
@@ -229,10 +280,49 @@
   cursor: pointer;
   font-weight: var(--fw-semibold);
   transition: var(--transition);
+  display: flex;
+  align-items: center;
 }
 .card-evento button:hover {
   background-color: var(--primary);
   color: var(--text-inverted);
+}
+
+/* Cabeçalho da página de eventos (título + botão) */
+.eventos-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-6);
+}
+
+.eventos-header h2 {
+  margin: 0;
+  font-size: var(--fs-h2);
+  font-weight: var(--fw-bold);
+  color: var(--text-primary);
+}
+
+/* Botão "Novo Evento" para admin */
+.btn-novo-evento {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border-radius: 999px;
+  border: none;
+  cursor: pointer;
+  font-size: var(--fs-small);
+  font-weight: var(--fw-semibold);
+  background-color: var(--primary);
+  color: var(--text-inverted);
+  box-shadow: var(--shadow-md);
+  transition: var(--transition);
+}
+
+.btn-novo-evento:hover {
+  box-shadow: var(--shadow-lg);
+  transform: translateY(-1px);
 }
 
 /* --- DETALHES DO EVENTO --- */
@@ -371,11 +461,12 @@
   font-size: var(--fs-small);
   font-weight: var(--fw-semibold);
   transition: var(--transition);
+
   
   /* Suporte a Ícone */
   display: flex;
   align-items: center;
-  gap: var(--space-1); /* Gap menor */
+  gap: 4px; /* Gap menor */
 }
 .btn-cancelar-small:hover {
   background-color: #c82333;
@@ -405,3 +496,21 @@ body {
   color: var(--text-primary);
   transition: background-color var(--transition), color var(--transition);
 }
+/* Wrapper que segura o botão sem afetar layout */
+.form-voltar-wrapper {
+  position: relative;
+  height: 0; /* não empurra o layout */
+}
+
+/* Botão volta absoluto */
+.form-voltar {
+  background-color: var(--bg-secondary);
+  opacity: 0.9;
+  margin-right: 8px;
+  margin-bottom: 0;
+}
+
+.form-voltar:hover {
+  opacity: 1;
+}
+
