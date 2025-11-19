@@ -142,45 +142,34 @@ function EventosPage({ setPagina, setEventoEditando, setEventoGerenciando, user 
         </motion.div>
       ) : (
         // === Lista de Eventos ===
-        <motion.div 
-          className="lista-eventos"
-          variants={containerVariants}
-          initial="hidden"
-          animate="visible"
-        >
-          {/* 3. CABEÇALHO FLEX (Título + Botão Admin) */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-            <h2 style={{ margin: 0 }}>Eventos Disponíveis</h2>
-            
+        <div>
+          {/* Cabeçalho alinhado como em "Minhas Inscrições" */}
+          <div className="eventos-header">
+            <h2>Eventos Disponíveis</h2>
+
             {isAdmin && (
               <motion.button
                 onClick={handleNovo}
-                // Estilos inline para garantir o visual bonito sem depender de classes quebradas
-                style={{ 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  gap: '8px', 
-                  padding: '10px 16px', 
-                  fontSize: '0.9rem',
-                  backgroundColor: '#4F46E5', // Cor roxa do tema
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  fontWeight: '600',
-                  boxShadow: '0 4px 6px -1px rgba(79, 70, 229, 0.2)'
-                }}
+                className="btn-novo-evento"
                 {...buttonHoverTap}
               >
-                <Plus size={18} /> Novo Evento
+                <Plus size={18} />
+                <span>Novo Evento</span>
               </motion.button>
             )}
           </div>
 
-          {eventos.map(evento => {
-            const jaInscrito = inscricoesIds.has(evento.id);
+          {/* Apenas os cards ficam dentro da grid .lista-eventos */}
+          <motion.div 
+            className="lista-eventos"
+            variants={containerVariants}
+            initial="hidden"
+            animate="visible"
+          >
+            {eventos.map(evento => {
+              const jaInscrito = inscricoesIds.has(evento.id);
 
-            return (
+              return (
                 <motion.div 
                   key={evento.id} 
                   className="card-evento"
@@ -189,50 +178,54 @@ function EventosPage({ setPagina, setEventoEditando, setEventoGerenciando, user 
                 >
                   <h3>{evento.nome}</h3>
                   <p><strong>Data:</strong> {new Date(evento.data_evento).toLocaleDateString()}</p>
+                  
+                  {jaInscrito && (
+                    <p style={{ color: '#10B981', fontWeight: 'bold', fontSize: '0.9rem', marginTop: '0.5rem' }}>
+                      ✓ Você já está inscrito
+                    </p>
+                  )}
 
-                  {isAdmin && (
-                    <motion.button
+                  <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+                    {isAdmin && (
+                      <motion.button
                         className="btn-admin"
                         onClick={() => handleCheckinQr(evento)}
                         {...buttonHoverTap}
-                    >
+                      >
                         <QrCode size={14} /> Gerar QR Check-in
-                    </motion.button>
-                  )}
-                  
-                  {jaInscrito && (
-                      <p style={{ color: '#10B981', fontWeight: 'bold', fontSize: '0.9rem', marginTop: '0.5rem' }}>
-                          ✓ Você já está inscrito
-                      </p>
-                  )}
-                  <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+                      </motion.button>
+                    )}
                     <motion.button 
                       onClick={() => setEventoSelecionado(evento)}
-                      {...buttonHoverTap}>Ver Detalhes
+                      {...buttonHoverTap}
+                    >
+                      Ver Detalhes
                     </motion.button>
+
                     {isAdmin && (
-                          <motion.button
-                              onClick={() => handleEditar(evento)}
-                              className="btn-secondary" // Pode criar essa classe ou usar inline
-                              style={{ 
-                                  backgroundColor: '#F3F4F6', 
-                                  color: '#4B5563', 
-                                  border: '1px solid #E5E7EB',
-                                  padding: '0 12px',
-                                  borderRadius: '6px',
-                                  cursor: 'pointer'
-                              }}
-                              title="Editar Evento"
-                              {...buttonHoverTap}
-                          >
-                              <Edit2 size={16} />
-                          </motion.button>
-                      )}
+                      <motion.button
+                        onClick={() => handleEditar(evento)}
+                        className="btn-secondary"
+                        style={{ 
+                          backgroundColor: '#F3F4F6', 
+                          color: '#4B5563', 
+                          border: '1px solid #E5E7EB',
+                          padding: '0 12px',
+                          borderRadius: '6px',
+                          cursor: 'pointer'
+                        }}
+                        title="Editar Evento"
+                        {...buttonHoverTap}
+                      >
+                        <Edit2 size={16} />
+                      </motion.button>
+                    )}
                   </div>
                 </motion.div>
-            );
-          })}
-        </motion.div>
+              );
+            })}
+          </motion.div>
+        </div>
       )}
     </>
   );
