@@ -1,5 +1,4 @@
 # servico_eventos/src/main.py
-
 from fastapi import (
     FastAPI, Depends, HTTPException, status, Query, BackgroundTasks, Request
 )
@@ -379,6 +378,15 @@ def listar_todas_inscricoes(
         joinedload(models.Inscricao.evento)
     ).all()
 
+@app.get("/admin/inscricoes", response_model=List[schemas.Inscricao])
+def listar_todas_inscricoes_admin(
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin_user)
+):    
+    # Retorna TODAS as inscrições do sistema para o App Local baixar
+    inscricoes = db.query(models.Inscricao).all()
+    return inscricoes
+
 
 # ============================================================
 #         ADMIN — CRIAR INSCRIÇÃO PARA TERCEIROS
@@ -583,6 +591,7 @@ def emitir_certificado(
 @app.post("/admin/sync/presencas", tags=["Admin"])
 def sync_presencas_offline(
     payload: schemas.SyncPayload,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     admin: User = Depends(get_current_admin_user)
 ):
@@ -595,24 +604,73 @@ def sync_presencas_offline(
 
         existente = db.query(models.Presenca).filter_by(inscricao_id=item.inscricao_id).first()
         if existente:
+            background_tasks.add_task(processar_geracao_certificado, item.inscricao_id, get_current_admin_user.token)
+            results.append(existente.id)
             continue
+        try:
+            token = get_current_admin_user.token
 
-        presenca = models.Presenca(
-            inscricao_id=insc.id,
-            usuario_id=insc.usuario_id,
-            evento_id=insc.evento_id,
-            origem=models.PresencaOrigem.SINCRONIZADO,
-            data_checkin=item.data_checkin
-        )
+            presenca = models.Presenca(
+                inscricao_id=insc.id,
+                usuario_id=insc.usuario_id,
+                evento_id=insc.evento_id,
+                origem=models.PresencaOrigem.SINCRONIZADO,
+                data_checkin=item.data_checkin
+            )
 
-        db.add(presenca)
-        db.commit()
-        results.append(presenca.id)
+            db.add(presenca)
+            db.commit()
+            results.append(presenca.id)
+
+            background_tasks.add_task(processar_geracao_certificado, item.inscricao_id, token)
+        except Exception as e:
+            logger.error(f"[SYNC] Erro ao salvar presença no banco: {e}")
+            db.rollback()
 
     return success({
         "sincronizadas": len(results),
         "ids": results
     })
+
+# --- FUNÇÃO AUXILIAR DE GERAÇÃO (RODA EM BACKGROUND) ---
+async def processar_geracao_certificado(inscricao_id: int, token_admin: str):
+    """
+    Tarefa em background que chama o serviço de certificados.
+    Não trava o App Local esperando resposta.
+    """
+    logger.info(f"[BG-TASK] Iniciando processamento de certificado para inscricao {inscricao_id}")
+    
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        try:
+            # 1. Buscar dados da inscrição para saber quem é o usuário e evento
+            # Como estamos no mesmo serviço (Eventos), podemos usar DB direto ou API interna?
+            # Para simplificar e evitar problemas de sessão async, vamos assumir que o servico_certificados
+            # é esperto o suficiente para buscar os dados se passarmos o ID, 
+            # OU passamos os dados mastigados aqui.
+            
+            # Vamos tentar a rota padrão de criação de certificado
+            payload = {
+                "inscricao_id": inscricao_id,
+                # O serviço de certificados deve ser capaz de buscar o resto
+            }
+            
+            # ROTA INTERNA DO DOCKER
+            url_cert = "http://servico_certificados:8000/certificados" # ou /internal/...
+            
+            headers = {"Authorization": f"Bearer {token_admin}"}
+            
+            logger.info(f"[BG-TASK] Chamando POST {url_cert}")
+            resp = await client.post(url_cert, json=payload, headers=headers)
+            
+            if resp.status_code in [200, 201]:
+                logger.info(f"[BG-TASK] Certificado gerado com sucesso! ID: {inscricao_id}")
+            elif resp.status_code == 409:
+                 logger.info(f"[BG-TASK] Certificado já existia para ID: {inscricao_id}")
+            else:
+                logger.error(f"[BG-TASK] Erro ao gerar: {resp.status_code} - {resp.text}")
+
+        except Exception as e:
+            logger.error(f"[BG-TASK] Falha de conexão com microsserviço certificados: {str(e)}")
 
 # ============================================================
 #        USUÁRIO – CONSUMO DE TOKEN QR CODE (CHECK-IN RÁPIDO)
