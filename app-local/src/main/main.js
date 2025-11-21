@@ -1,73 +1,50 @@
 // app-local/src/main/main.js
-const { app, BrowserWindow, ipcMain } = require('electron');
-const path = require('node:path');
-const { createDatabase } = require('./db/db');
+const { app, BrowserWindow } = require('electron');
+const path = require('path');
+const { connectDB } = require('./db/db');
+const { initIPC } = require('./ipc/index'); // <--- Importante
+const { createLogger } = require('./logger');
 
-// Importa os manipuladores (Handlers)
-const registerAuthHandlers = require('./ipc/ipc-auth');
-const registerOfflineHandlers = require('./ipc/ipc-offline');
-const registerSyncHandlers = require('./ipc/ipc-sync');
+const logger = createLogger('main');
+let mainWindow;
 
-// Handle creating/removing shortcuts on Windows when installing/uninstalling.
-if (require('electron-squirrel-startup')) {
-  app.quit();
-}
-
-let dbInstance = null;
-
-const createWindow = () => {
-  const mainWindow = new BrowserWindow({
+function createWindow() {
+  mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
-      nodeIntegration: false, // Segurança: Mantenha false
-      contextIsolation: true, // Segurança: Mantenha true
+      nodeIntegration: false,
+      contextIsolation: true, // Deve ser true para usar o contextBridge
     },
   });
 
-  // Carrega a interface (Vite)
-  const devServerUrl = typeof MAIN_WINDOW_VITE_DEV_SERVER_URL !== 'undefined' ? MAIN_WINDOW_VITE_DEV_SERVER_URL : null;
-  const viteName = typeof MAIN_WINDOW_VITE_NAME !== 'undefined' ? MAIN_WINDOW_VITE_NAME : 'main_window';
-
-  if (devServerUrl) {
-    mainWindow.loadURL(devServerUrl);
-    mainWindow.webContents.openDevTools(); // Abre DevTools para debug
+  // Em dev:
+  if (process.env.NODE_ENV === 'development') {
+      mainWindow.loadURL('http://localhost:5173');
   } else {
-    // Em produção, carrega o arquivo local
-    mainWindow.loadFile(path.join(__dirname, `../renderer/index.html`));
+      mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
   }
-};
+}
 
-app.on('ready', async () => {
-  // 1. Inicia Banco de Dados
-  try {
-    dbInstance = await createDatabase(app);
-    console.log("✅ Banco de Dados Local Iniciado.");
-  } catch (err) {
-    console.error("❌ Erro fatal no Banco de Dados:", err);
-  }
+app.whenReady().then(() => {
+  logger.info("app_starting");
 
-  // 2. REGISTRA OS HANDLERS IPC (AQUI ESTÁ O SEGREDO!)
-  // Precisamos passar a instância do DB para eles
-  registerAuthHandlers(); 
-  registerOfflineHandlers(dbInstance);
-  registerSyncHandlers(dbInstance);
+  // 1. Conectar ao Banco de Dados
+  const db = connectDB();
 
-  // Handler auxiliar de log vindo do front
-  ipcMain.on('log-message', (_, msg) => console.log("[RENDERER]:", msg));
+  // 2. Registrar IPCs (AQUI ESTAVA FALTANDO OU FALHANDO)
+  // Isso chama o index.js -> que chama o ipc-sync.js
+  initIPC(db);
+  logger.info("ipc_handlers_registered");
 
   createWindow();
+
+  app.on('activate', function () {
+    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+  });
 });
 
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit();
-  }
-});
-
-app.on('activate', () => {
-  if (BrowserWindow.getAllWindows().length === 0) {
-    createWindow();
-  }
+app.on('window-all-closed', function () {
+  if (process.platform !== 'darwin') app.quit();
 });

@@ -1,516 +1,483 @@
-/* --- BASE APP --- */
-.conteudo {
-  max-width: 900px;
-  margin: 0 auto;
-  padding: var(--space-7) var(--space-4); /* 32px 16px */
-  perspective: 1000px;
+/* portal-web/src/App.css */
+
+/* --- VARIÁVEIS GLOBAIS (Identity: Premium Corporate) --- */
+:root {
+  /* Cores Principais */
+  --primary: #0F172A;       /* Midnight Blue */
+  --primary-hover: #1E293B;
+  --accent: #4F46E5;        /* Indigo */
+  --accent-light: #EEF2FF;
+  
+  /* Semântica */
+  --success: #10B981;
+  --success-bg: #D1FAE5;
+  --danger: #DC2626;
+  --danger-bg: #FEE2E2;
+  --warning: #F59E0B;
+  
+  /* Superfícies */
+  --bg-body: #F8FAFC;       /* Slate 50 */
+  --bg-surface: #FFFFFF;    /* White */
+  --bg-element: #F1F5F9;    /* Slate 100 */
+  
+  /* Texto */
+  --text-primary: #0F172A;
+  --text-secondary: #64748B;
+  --text-inverted: #FFFFFF;
+  
+  --border-color: #E2E8F0;
+  
+  /* Componentes */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1);
+  
+  --transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  --header-height: 72px;
 }
+
+/* --- BASE --- */
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+.App { 
+  min-height: 100vh; 
+  display: flex; 
+  flex-direction: column;
+  /* APLICAÇÃO DO TEMA AQUI */
+  background-color: var(--bg-body); 
+  color: var(--text-primary);
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+.conteudo { width: 100%; max-width: 1200px; margin: 0 auto; padding: 40px 24px; flex: 1; }
 
 /* --- HEADER --- */
 .App-header {
-  /* Estilo Apple/Notion: Header claro, com borda sutil */
-  background-color: var(--bg-secondary);
-  padding: var(--space-4) var(--space-7); /* 16px 32px */
-  color: var(--text-primary);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+  background-color: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(8px);
+  height: var(--header-height);
   border-bottom: 1px solid var(--border-color);
-  /* Sombra sutil para dar profundidade */
-  box-shadow: 0 2px 4px rgba(0,0,0,0.02);
-  height: 72px; /* Altura fixa para o header */
-  transition: background-color var(--transition), border-color var(--transition);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 32px;
+  position: sticky;
+  top: 0;
+  z-index: 50;
 }
+.App-logo { height: 48px; width: auto; }
+.Login-Rgister-logo { height: 144px; width: auto; }
+.header-actions { display: flex; align-items: center; gap: 16px; }
 
-.App-logo {
-  height: 64px; /* Ajuste a altura do logo conforme necessário */
-  color: #1A1A1A;
-}
-
-/* --- NAVEGAÇÃO PRINCIPAL (HEADER) --- */
+/* --- NAVEGAÇÃO (Ilha Central) --- */
 .main-nav {
   display: flex;
-  gap: var(--space-2); /* 8px */
+  align-items: center;
+  gap: 4px;
   position: absolute;
   left: 50%;
-  transform: translateX(-50%); /* Centraliza a navegação */
+  transform: translateX(-50%);
+  background-color: var(--bg-element);
+  padding: 4px;
+  border-radius: 100px;
 }
+
 .main-nav button {
-  background: none;
+  background: transparent;
   border: none;
   color: var(--text-secondary);
-  font-size: var(--fs-body);
-  font-weight: var(--fw-semibold);
+  font-size: 0.9rem;
+  font-weight: 600;
+  padding: 8px 16px;
+  border-radius: 100px;
   cursor: pointer;
-  padding: var(--space-2) var(--space-3); /* 8px 12px */
-  border-bottom: 3px solid transparent;
   transition: var(--transition);
   display: flex;
   align-items: center;
-  column-gap: 4px;
+  gap: 8px;
 }
-.main-nav button:hover {
-  color: var(--text-primary);
-}
-.main-nav button.active {
-  color: var(--primary);
-  border-bottom-color: var(--primary);
-}
+.main-nav button svg { display: block; flex-shrink: 0; }
 
-.header-actions {
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-}
+.main-nav button:hover { color: var(--text-primary); background-color: rgba(0,0,0,0.05); }
+.main-nav button.active { background-color: var(--bg-surface); color: var(--primary); box-shadow: var(--shadow-sm); }
 
-/* Botão de Tema (Passo 3) */
-.theme-toggle {
-  background-color: var(--bg-primary);
-  border: 1px solid var(--border-color);
-  color: var(--text-secondary);
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  cursor: pointer;
+/* Botão Admin (Novo Evento) na Nav */
+.main-nav .btn-admin {
+  background-color: var(--primary);
+  color: white !important;
+  padding-left: 20px; padding-right: 20px;
+  margin-left: 8px;
+}
+.main-nav .btn-admin:hover { background-color: var(--primary-hover); transform: translateY(-1px); }
+
+/* --- CONTAINERS GERAIS --- */
+.login-container {
   display: flex;
-  align-items: center;
   justify-content: center;
-  transition: var(--transition);
+  align-items: center;
+  min-height: calc(100vh - var(--header-height));
+  padding: 20px;
 }
-.theme-toggle:hover {
-  color: var(--text-primary);
-  border-color: #ccc;
+.login-card {
+  background: var(--bg-surface);
+  padding: 40px;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  width: 100%;
+  max-width: 450px;
+  border: 1px solid var(--border-color);
+  text-align: center;
 }
 
-/* --- Botão de Logout (refatorado) --- */
-.btn-logout {
-  background-color: var(--danger);
-  color: var(--text-inverted);
-  border: none;
-  padding: var(--space-2) var(--space-4); /* Mais padding horizontal */
-  border-radius: var(--border-radius-sm);
-  cursor: pointer;
-  font-size: var(--fs-small);
-  font-weight: var(--fw-semibold);
-  transition: var(--transition);
+/* Header de Formulários (Criar Evento / Checkin) */
+.form-header {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
-}
-.btn-logout:hover {
-  background-color: #c82333;
-  box-shadow: var(--shadow-md);
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border-color);
 }
 
+/* --- FORMULÁRIOS --- */
+.form-group { margin-bottom: 20px; text-align: left; }
+.form-group label { display: block; margin-bottom: 6px; font-weight: 600; font-size: 0.85rem; color: var(--text-primary); }
 
-/* --- FORMULÁRIOS (Login/Cadastro) --- */
-.form-container {
-  max-width: 450px;
-  margin: var(--space-8) auto;
-  padding: var(--space-8);
-  background-color: var(--bg-secondary);
-  border-radius: var(--border-radius-lg);
-  box-shadow: var(--shadow-lg);
-  border: 1px solid var(--border-color);
-  transition: background-color var(--transition), border-color var(--transition);
-}
-
-.form-container h2 {
-  font-size: var(--fs-h2);
-  font-weight: var(--fw-bold);
-  margin-bottom: var(--space-6);
-  color: var(--text-primary);
-  transition: color var(--transition);
-}
-
-/* --- Inputs com ícone à esquerda (CriarEventoPage) --- */
-.input-with-icon {
-  position: relative;
-}
-
+/* Inputs com Ícones */
+.form-group.input-with-icon { position: relative; }
 .input-left-icon {
-  position: absolute;
-  top: 50%;
-  left: 12px;
-  transform: translateY(-50%);
-  color: var(--text-secondary);
-  pointer-events: none;
+  position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+  color: var(--text-secondary); pointer-events: none; z-index: 10;
 }
+/* Ajuste para Textarea */
+.input-with-icon.textarea-wrapper .input-left-icon { top: 20px; transform: none; }
 
-/* Quando for textarea, o ícone fica um pouco mais acima */
-.textarea-wrapper .input-left-icon {
-  top: 18px;
-}
-
-/* Reaproveita o estilo dos inputs também para textarea e select */
-.form-group textarea,
-.form-group select {
+/* Estilo Base de Campos */
+.form-group input, .form-group select, .form-group textarea {
   width: 100%;
-  padding: var(--space-3) var(--space-4);
+  padding: 10px 12px;
   border: 1px solid var(--border-color);
-  border-radius: var(--border-radius-sm);
-  font-size: var(--fs-body);
-  transition: var(--transition);
-  background-color: var(--bg-primary);
+  border-radius: var(--radius-md);
+  font-size: 1rem;
+  background-color: var(--bg-body);
   color: var(--text-primary);
-  resize: vertical;
-}
-
-/* Ajusta padding quando tem ícone à esquerda */
-.input-with-icon input,
-.input-with-icon textarea {
-  padding-left: 40px; /* espaço para o ícone */
-}
-
-/* Focus para textarea/select também */
-.form-group textarea:focus,
-.form-group select:focus {
-  outline: none;
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px var(--primary-light);
-}
-
-.form-group {
-  margin-bottom: var(--space-5); /* 20px */
-}
-
-.form-group label {
-  display: block;
-  margin-bottom: var(--space-2); /* 8px */
-  font-weight: var(--fw-semibold);
-  font-size: var(--fs-small);
-  color: var(--text-secondary);
-  transition: color var(--transition);
-}
-
-.form-group input {
-  width: 100%;
-  padding: var(--space-3) var(--space-4); /* 12px 16px */
-  border: 1px solid var(--border-color);
-  border-radius: var(--border-radius-sm);
-  font-size: var(--fs-body);
   transition: var(--transition);
-  background-color: var(--bg-primary);
-  color: var(--text-primary);
-}
-/* Microinteração de Focus (essencial) */
-.form-group input:focus {
-  outline: none;
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px var(--primary-light);
+  display: block; /* Garante bloco */
 }
 
-/* --- BOTÕES (Princípio de Design) --- */
-/* Botão Primário (Laranja Nexstage) */
-.btn-primary {
+/* Padding extra OBRIGATÓRIO se tiver ícone */
+.input-with-icon input, 
+.input-with-icon select, 
+.input-with-icon textarea { 
+  padding-left: 42px !important; 
+}
+
+.form-group input:focus, .form-group textarea:focus, .form-group select:focus {
+  outline: none; border-color: var(--accent); background-color: #fff;
+  box-shadow: 0 0 0 4px var(--accent-light);
+}
+.input-with-icon:focus-within .input-left-icon { color: var(--accent); }
+
+/* --- BOTÕES --- */
+/* Botão Principal (Login, Salvar) */
+.btn-login {
   width: 100%;
-  padding: var(--space-4); /* 16px */
+  padding: 12px;
   background-color: var(--primary);
   color: white;
   border: none;
-  border-radius: var(--border-radius-sm);
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  font-size: 0.95rem;
   cursor: pointer;
-  font-size: var(--fs-body);
-  font-weight: var(--fw-semibold);
+  transition: var(--transition);
+  display: flex; justify-content: center; align-items: center; gap: 8px;
+}
+.btn-login:hover { background-color: var(--primary-hover); box-shadow: var(--shadow-md); transform: translateY(-1px); }
+.btn-login:disabled { opacity: 0.7; cursor: not-allowed; }
+
+/* Botão Novo Evento (Pílula) */
+.btn-novo-evento {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background-color: var(--primary) !important; 
+  color: white !important;
+  border: none !important;
+  padding: 10px 20px !important; 
+  border-radius: 100px !important; 
+  font-size: 0.9rem !important;
+  font-weight: 600 !important;
+  cursor: pointer;
+  box-shadow: var(--shadow-md);
+  transition: var(--transition);
+  height: 42px;
+}
+.btn-novo-evento:hover { background-color: var(--primary-hover) !important; transform: translateY(-2px); box-shadow: var(--shadow-lg); }
+
+/* Botão Voltar (Circular) */
+.btn-back-icon {
+  background: transparent; border: 1px solid var(--border-color);
+  color: var(--text-secondary); width: 40px; height: 40px;
+  border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  cursor: pointer; transition: var(--transition); margin-right: 16px;
+}
+.btn-back-icon:hover { background: var(--bg-element); color: var(--primary); border-color: var(--primary); }
+
+/* Botão Logout/Sair/Cancelar (Outline) */
+.btn-logout {
+  background: transparent; border: 1px solid var(--border-color);
+  color: var(--text-secondary); padding: 8px 16px;
+  border-radius: var(--radius-sm); font-weight: 600; cursor: pointer;
+  display: flex; align-items: center; gap: 8px; transition: var(--transition);
+}
+.btn-logout:hover { border-color: var(--danger); color: var(--danger); background: var(--danger-bg); }
+
+
+/* --- CARDS DE EVENTOS --- */
+.eventos-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 32px; padding-bottom: 16px; border-bottom: 1px solid var(--border-color);
+}
+.eventos-header h2 { font-size: 1.75rem; color: var(--primary); margin: 0; }
+
+.lista-eventos { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 24px; }
+
+.card-evento {
+  background: var(--bg-surface); border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg); padding: 24px;
+  display: flex; flex-direction: column; justify-content: space-between;
   transition: var(--transition);
 }
-.btn-primary:hover {
-  box-shadow: var(--shadow-md);
+.card-evento:hover { transform: translateY(-4px); box-shadow: var(--shadow-lg); border-color: var(--accent-light); }
+
+.card-evento h3 { font-size: 1.25rem; color: var(--text-primary); margin: 0 0 8px 0; }
+.data-evento { font-size: 0.9rem; color: var(--text-secondary); display: flex; align-items: center; gap: 6px; margin-bottom: 16px; }
+
+/* Ações do Card */
+.card-actions-row { display: flex; gap: 8px; margin-top: auto; width: 100%; }
+
+.btn-detalhes { 
+  flex: 1; justify-content: center; height: 38px; 
+  background: var(--bg-element); border: 1px solid var(--border-color); 
+  color: var(--text-secondary); border-radius: var(--radius-sm); 
+  font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px;
+}
+.btn-detalhes:hover { background: var(--primary-hover); color: white; border-color: var(--primary-hover); }
+
+/* Botões de Ícone (Quadrados) */
+.btn-admin-qr, .btn-icon-secondary {
+  width: 38px !important; height: 38px !important; padding: 0 !important;
+  display: inline-flex !important; align-items: center; justify-content: center;
+  border-radius: var(--radius-sm) !important; border: 1px solid transparent;
+  cursor: pointer; transition: var(--transition);
+}
+.btn-admin-qr { background: var(--accent-light) !important; color: var(--accent) !important; }
+.btn-admin-qr:hover { background: var(--accent) !important; color: white !important; }
+
+.btn-icon-secondary { background: white !important; border-color: var(--border-color) !important; color: var(--text-secondary) !important; }
+.btn-icon-secondary:hover { border-color: var(--text-primary) !important; color: var(--text-primary) !important; background-color: var(--bg-element) !important; }
+
+/* --- DETALHES DO EVENTO --- */
+.evento-detalhe {
+  background: var(--bg-surface); border-radius: var(--radius-lg);
+  padding: 40px; box-shadow: var(--shadow-md); border: 1px solid var(--border-color);
+}
+.evento-detalhe h2 { font-size: 2.5rem; margin-bottom: 16px; color: var(--primary); }
+.descricao-evento {
+  font-size: 1.1rem; line-height: 1.8; color: var(--text-secondary);
+  margin: 24px 0; padding: 24px; background: var(--bg-body);
+  border-left: 4px solid var(--accent); border-radius: 0 var(--radius-md) var(--radius-md) 0;
 }
 
+/* Botão Inscrever/Certificado (Destaque no Detalhe) */
+.btn-inscrever, .btn-certificado {
+  background-color: var(--primary) !important; color: white !important;
+  border: none !important; padding: 12px 24px !important; border-radius: var(--radius-sm) !important;
+  font-weight: bold !important; font-size: 1.1rem !important;
+  cursor: pointer; display: flex; align-items: center; gap: 8px;
+  box-shadow: var(--shadow-md); transition: var(--transition);
+}
+.btn-inscrever:hover, .btn-certificado:hover { background-color: var(--primary-hover) !important; transform: translateY(-1px); }
+.btn-inscrever:disabled { background-color: #a7f3d0 !important; cursor: default; transform: none; }
+
+/* --- MINHAS INSCRIÇÕES --- */
+.lista-inscricoes { display: flex; flex-direction: column; gap: 16px; }
+.card-inscricao {
+  background: var(--bg-surface); border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg); padding: 20px;
+  display: flex; align-items: center; justify-content: space-between;
+  box-shadow: var(--shadow-sm);
+}
+.status-container { display: flex; align-items: center; gap: 12px; }
+.status-badge {
+  padding: 4px 12px; border-radius: 100px; font-size: 0.75rem; font-weight: 700;
+  text-transform: uppercase; display: inline-flex; align-items: center; gap: 6px;
+}
+.status-badge.sucesso { background: var(--success-bg); color: var(--success); }
+.status-badge.cancelado { background: var(--danger-bg); color: var(--danger); }
+.status-badge.pendente { background: #FEF3C7; color: #B45309; }
+
+.btn-cancelar-small {
+  background: white !important; border: 1px solid var(--danger) !important;
+  color: var(--danger) !important; padding: 6px 12px !important;
+  border-radius: 6px !important; font-size: 0.8rem !important; font-weight: bold !important;
+  cursor: pointer; display: flex; align-items: center; gap: 6px;
+}
+.btn-cancelar-small:hover { background: var(--danger-bg) !important; }
+
 .form-switch {
-  text-align: center;
-  margin-top: var(--space-6);
-  font-size: var(--fs-small);
+  margin-top: 24px;
+  font-size: 0.9rem;
   color: var(--text-secondary);
+  text-align: center; /* Centraliza o texto */
 }
 
 .btn-link {
   background: none;
   border: none;
-  color: var(--primary);
+  color: var(--accent); /* Usa a cor Indigo de destaque */
+  font-weight: 600;
   cursor: pointer;
+  margin-left: 4px;
   padding: 0;
-  margin-left: var(--space-1);
-  font-size: var(--fs-small);
-  font-weight: var(--fw-semibold);
+  font-size: inherit; /* Herda o tamanho do pai */
+  transition: var(--transition);
 }
+
 .btn-link:hover {
+  color: var(--primary); /* Muda para Midnight Blue no hover */
   text-decoration: underline;
 }
 
-/* --- LISTA DE EVENTOS (Cards) --- */
-.lista-eventos {
-  display: grid;
-  /* Grid responsivo para os cards */
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: var(--space-6); /* 24px */
-}
+/* --- EXTRAS --- */
+.theme-toggle { background: transparent; border: 1px solid var(--border-color); color: var(--text-secondary); width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.form-error { background: var(--danger-bg); color: var(--danger); padding: 10px; border-radius: var(--radius-sm); margin-bottom: 16px; font-size: 0.9rem; text-align: center; }
+.empty-state { text-align: center; padding: 48px; color: var(--text-secondary); font-style: italic; background: var(--bg-surface); border-radius: var(--radius-lg); border: 2px dashed var(--border-color); }
 
-.card-evento {
-  background-color: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: var(--border-radius-lg); /* 16px */
-  padding: var(--space-6);
-  box-shadow: var(--shadow-md);
-  transition: var(--transition);
+/* --- MODAL (QR Code e Certificado) --- */
+.modal-overlay {
+  position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  background-color: rgba(0,0,0,0.6); backdrop-filter: blur(4px);
+  display: flex; justify-content: center; align-items: center; z-index: 100;
 }
-/* Microinteração de Hover (essencial) */
-.card-evento:hover {
-  box-shadow: var(--shadow-lg);
+.modal-content {
+  background-color: var(--bg-surface); padding: 32px; border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg); max-width: 400px; width: 90%; text-align: center; position: relative;
 }
+.btn-close-modal { position: absolute; top: 16px; right: 16px; background: none; border: none; cursor: pointer; color: var(--text-secondary); }
 
-.card-evento h3 {
-  font-size: var(--fs-h3);
-  font-weight: var(--fw-semibold);
-  margin-bottom: var(--space-2);
+.qr-container {
+  background: white; padding: 16px; border-radius: var(--radius-lg);
+  border: 2px solid var(--primary); display: inline-block; margin: 16px 0;
 }
-.card-evento p {
-  font-size: var(--fs-body);
-  color: var(--text-secondary);
-  margin-bottom: var(--space-4);
-}
-/* Botão no card */
-.card-evento button {
-  background-color: var(--primary-light);
-  color: var(--primary);
-  border: none;
-  padding: var(--space-2) var(--space-4);
-  border-radius: var(--border-radius-sm);
-  cursor: pointer;
-  font-weight: var(--fw-semibold);
-  transition: var(--transition);
-  display: flex;
-  align-items: center;
-}
-.card-evento button:hover {
-  background-color: var(--primary);
-  color: var(--text-inverted);
-}
+.qr-container img { display: block; width: 200px; height: 200px; }
+.token-display { display: block; margin-top: 8px; font-family: monospace; background-color: var(--bg-element); padding: 8px; border-radius: 4px; letter-spacing: 2px; font-weight: bold; }
 
-/* Cabeçalho da página de eventos (título + botão) */
-.eventos-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: var(--space-6);
-}
-
-.eventos-header h2 {
-  margin: 0;
-  font-size: var(--fs-h2);
-  font-weight: var(--fw-bold);
-  color: var(--text-primary);
-}
-
-/* Botão "Novo Evento" para admin */
-.btn-novo-evento {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-2) var(--space-4);
-  border-radius: 999px;
-  border: none;
-  cursor: pointer;
-  font-size: var(--fs-small);
-  font-weight: var(--fw-semibold);
-  background-color: var(--primary);
-  color: var(--text-inverted);
-  box-shadow: var(--shadow-md);
-  transition: var(--transition);
-}
-
-.btn-novo-evento:hover {
-  box-shadow: var(--shadow-lg);
-  transform: translateY(-1px);
-}
-
-/* --- DETALHES DO EVENTO --- */
-.evento-detalhe {
-  background-color: var(--bg-secondary);
-  border-radius: var(--border-radius-lg);
-  padding: var(--space-8);
-  box-shadow: var(--shadow-lg);
-  border: 1px solid var(--border-color);
-  transition: background-color var(--transition), border-color var(--transition);
-}
-.evento-detalhe h2 {
-  font-size: var(--fs-h2);
-  font-weight: var(--fw-bold);
-  margin-bottom: var(--space-4);
-}
-.evento-detalhe p {
-  font-size: var(--fs-body);
-  color: var(--text-secondary);
-  line-height: 1.6;
-  max-width: 70ch;
-}
-.evento-detalhe p strong {
-  color: var(--text-primary);
-}
-
-/* Botões de Ação (Inscrever / Cancelar) */
-.btn-inscrever, .btn-cancelar {
-  border: none;
-  padding: var(--space-3) var(--space-6);
-  border-radius: var(--border-radius-sm);
-  cursor: pointer;
-  font-size: var(--fs-body);
-  font-weight: var(--fw-semibold);
-  margin-top: var(--space-6);
-  transition: var(--transition);
-  
-  /* Suporte a Ícone */
-  display: inline-flex; /* Usamos inline-flex aqui */
-  align-items: center;
-  gap: var(--space-2);
-}
-.btn-inscrever {
-  background-color: var(--success);
-  color: white;
-}
-.btn-cancelar {
-  background-color: var(--danger);
-  color: white;
-}
-.btn-inscrever:hover, .btn-cancelar:hover {
-  transform: scale(1.03);
-  box-shadow: var(--shadow-md);
-}
-
-/* Botão Voltar (Sutil) */
-.btn-voltar {
-  background-color: transparent;
-  border: 1px solid var(--border-color);
-  color: var(--text-secondary);
-  padding: var(--space-2) var(--space-4);
-  border-radius: var(--border-radius-sm);
-  cursor: pointer;
-  margin-bottom: var(--space-6);
-  font-weight: var(--fw-semibold);
-  transition: var(--transition);
-  
-  /* Suporte a Ícone */
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-.btn-voltar:hover {
-  background-color: var(--bg-primary);
-  border-color: #ccc;
-  color: var(--text-primary);
-}
-
-/* --- LISTA "MINHAS INSCRIÇÕES" --- */
-.lista-inscricoes {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-}
-
-.card-inscricao {
-  background-color: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: var(--border-radius-lg);
-  padding: var(--space-5) var(--space-6);
-  box-shadow: var(--shadow-md);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  transition: var(--transition);
-}
-.card-inscricao:hover {
-  border-color: #ccc;
-}
-.card-inscricao h3 {
-  font-size: var(--fs-h3);
-  font-weight: var(--fw-semibold);
-}
-
-/* Status de Check-in (Refatorado para incluir ícone) */
-.status-checkin {
-  font-weight: var(--fw-semibold);
-  font-size: var(--fs-small);
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-/* Pílula de status */
-.status-checkin::before {
-  content: '';
-  display: block;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background-color: currentColor; /* Pega a cor do texto */
-}
-.checkin-ok {
-  color: var(--success);
-}
-.checkin-pendente {
-  color: var(--warning);
-}
-
-.btn-cancelar-small {
-  background-color: var(--danger);
-  color: white;
-  border: none;
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--border-radius-sm);
-  cursor: pointer;
-  font-size: var(--fs-small);
-  font-weight: var(--fw-semibold);
-  transition: var(--transition);
-
-  
-  /* Suporte a Ícone */
-  display: flex;
-  align-items: center;
-  gap: 4px; /* Gap menor */
-}
-.btn-cancelar-small:hover {
-  background-color: #c82333;
-}
-
+/* --- DARK MODE (Premium Corporate Dark) --- */
 .App.dark {
-  /* Redefine as variáveis globais para o modo escuro */
+  /* Fundo Profundo */
+  --bg-body: #020617;       /* Slate 950 */
   
-  --text-primary: #F5F5F5;
-  --text-secondary: #a0a0a0;
-  --bg-primary: #1A1A1A;     /* Fundo grafite (principal) */
-  --bg-secondary: #252525;   /* Fundo grafite (cards) */
-  --border-color: #333333;   /* Bordas mais claras que o fundo */
+  /* Superfícies (Cards) */
+  --bg-surface: #0F172A;    /* Slate 900 */
+  --bg-element: #1E293B;    /* Slate 800 (Inputs, Nav) */
+  
+  /* Textos */
+  --text-primary: #F8FAFC;  /* Slate 50 (Branco suave) */
+  --text-secondary: #94A3B8;/* Slate 400 (Cinza azulado) */
+  --text-inverted: #0F172A; /* Texto para botões claros */
+  
+  /* Bordas */
+  --border-color: #1E293B;  /* Slate 800 */
+  
+  /* Ajustes de Cores de Ação */
+  --primary: #38BDF8;       /* Sky 400 (Mais brilhante no escuro) */
+  --primary-hover: #0EA5E9; /* Sky 500 */
+  --primary-light: #0F172A; /* Fundo de botões ativos */
 
-  /* Cores de status podem precisar de ajuste se ficarem muito vibrantes */
-  /* --primary: #FF7A00; (Mantém) */
+  /* Sombras mais sutis (luz ambiente) */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.5);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
 }
 
-/* Transições de Cor:
-  Adicionamos 'transition: background-color var(--transition)' 
-  e similares aos elementos (.App-header, .form-container, etc.)
-  para que a troca de tema seja suave.
-*/
-body {
-  /* Adicionamos transição ao body também */
-  background-color: var(--bg-primary);
-  color: var(--text-primary);
-  transition: background-color var(--transition), color var(--transition);
+/* Ajustes Específicos para Elementos no Modo Escuro */
+
+/* Card Cancelado (Dark Mode) */
+.App.dark .card-inscricao.cancelada {
+  background-color: #281010 !important; /* Vermelho muito escuro */
+  border-color: #450a0a !important;
 }
-/* Wrapper que segura o botão sem afetar layout */
-.form-voltar-wrapper {
-  position: relative;
-  height: 0; /* não empurra o layout */
+.App.dark .card-inscricao.cancelada h3 {
+  color: #9CA3AF; /* Texto cinza para item cancelado */
 }
 
-/* Botão volta absoluto */
-.form-voltar {
-  background-color: var(--bg-secondary);
-  opacity: 0.9;
-  margin-right: 8px;
-  margin-bottom: 0;
+/* Botões Outline no Dark Mode */
+.App.dark .btn-logout,
+.App.dark .btn-cancelar-small,
+.App.dark .btn-back-icon,
+.App.dark .btn-icon-secondary {
+  background-color: transparent !important;
+  border-color: #334155 !important;
+  color: #CBD5E1 !important;
 }
 
-.form-voltar:hover {
-  opacity: 1;
+.App.dark .btn-logout:hover,
+.App.dark .btn-cancelar-small:hover {
+  background-color: rgba(220, 38, 38, 0.2) !important; /* Vermelho translúcido */
+  border-color: var(--danger) !important;
+  color: var(--danger) !important;
 }
 
+.App.dark .btn-back-icon:hover,
+.App.dark .btn-icon-secondary:hover {
+  background-color: var(--bg-element) !important;
+  color: white !important;
+  border-color: white !important;
+}
+
+/* Inputs no Dark Mode */
+.App.dark input,
+.App.dark select,
+.App.dark textarea {
+  background-color: #0F172A; /* Fundo escuro para inputs */
+  color: white;
+  border-color: #334155;
+}
+.App.dark input:focus,
+.App.dark textarea:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
+}
+
+/* Header Glassmorphism Escuro */
+.App.dark .App-header {
+  background-color: rgba(15, 23, 42, 0.85);
+  border-bottom-color: #1E293B;
+}
+
+/* Modal QR Code */
+.App.dark .modal-content {
+  background-color: #1E293B;
+  border: 1px solid #334155;
+}
+.App.dark .token-display {
+  background-color: #0F172A;
+  color: var(--primary);
+  border: 1px solid #334155;
+}
+
+/* Botão Novo Evento e Login (Texto Preto no Dark Mode para contraste) */
+.App.dark .btn-login, 
+.App.dark .btn-novo-evento,
+.App.dark .btn-certificado {
+  color: #0F172A !important; /* Texto escuro no botão azul claro */
+}

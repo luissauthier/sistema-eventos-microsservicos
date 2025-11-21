@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import './App.css';
-import logoNexstage from './logo_nexstage_sem_fundo.svg';
-import { LogOut, Sun, Moon, PlusCircle } from 'lucide-react';
+import logoLight from './nexstage_sem_fundo_escuro.svg';
+import logoDark from './nexstage_sem_fundo_branco.svg';
+import { LogOut, Sun, Moon, PlusCircle, Calendar, Ticket, User, FileCheck, LogIn } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 import LoginPage from './components/LoginPage';
@@ -12,6 +13,7 @@ import ProfilePage from './components/ProfilePage';
 import ValidateCertificatePage from './components/ValidateCertificatePage';
 import CriarEventoPage from './components/CriarEventoPage';
 import CheckinPage from './components/CheckinPage';
+import ChangePasswordScreen from './components/ChangePasswordScreen';
 
 const pageVariants = {
   initial: { opacity: 0, y: 20 },
@@ -30,25 +32,43 @@ export const buttonHoverTap = {
 
 function App() {
   const [authToken, setAuthToken] = useState(localStorage.getItem('access_token'));
-  // 2. ADICIONAR ESTADO PARA O OBJETO DO USUÁRIO
+  
   const [user, setUser] = useState(() => {
+    const savedUser = localStorage.getItem('user');
     try {
-      return JSON.parse(localStorage.getItem('user') || 'null');
+      return savedUser ? JSON.parse(savedUser) : null;
     } catch {
       return null;
     }
   });
 
+  // Estes estados estavam abaixo do 'if' no seu código original, causando o erro.
+  // Agora estão aqui em cima, seguros.
   const [eventoGerenciando, setEventoGerenciando] = useState(null);
   const [pagina, setPagina] = useState(authToken ? 'eventos' : 'login'); 
   const [eventoEditando, setEventoEditando] = useState(null);
   const [theme, setTheme] = useState('light');
 
+  // 2. HANDLERS E FUNÇÕES AUXILIARES
+  const handleLoginSuccess = (usuarioLogado) => {
+      setUser(usuarioLogado);
+      setAuthToken(localStorage.getItem('access_token'));
+      setPagina('eventos'); // Redireciona para eventos ao logar
+  };
+
+  const handlePasswordChanged = () => {
+      setUser(prevUser => {
+          const updatedUser = { ...prevUser, must_change_password: false };
+          localStorage.setItem('user', JSON.stringify(updatedUser));
+          return updatedUser;
+      });
+  };
+
   const handleLogout = () => {
     localStorage.removeItem('access_token');
-    localStorage.removeItem('user'); // <<< 3. LIMPAR O USER NO LOGOUT
+    localStorage.removeItem('user');
     setAuthToken(null);
-    setUser(null); // <<< 3. LIMPAR O ESTADO DO USER
+    setUser(null);
     setPagina('login');
   };
 
@@ -56,19 +76,33 @@ function App() {
     setTheme(theme === 'light' ? 'dark' : 'light');
   };
 
+  const lastPage = localStorage.getItem('last_public_page');
+  if (!user && !authToken && !['register', 'validar'].includes(pagina)) {
+     // Se a pagina atual no estado não é publica, mostramos o login
+     // Nota: Alterei a lógica para olhar o estado 'pagina' em vez do localStorage direto para evitar loop
+     if (pagina !== 'login' && pagina !== 'register' && pagina !== 'validar') {
+        return <LoginPage onLogin={handleLoginSuccess} setPagina={setPagina} theme={theme} />;
+     }
+  }
+
+  // Proteção de Troca de Senha
+  if (user && user.must_change_password) {
+      return <ChangePasswordScreen onPasswordChanged={handlePasswordChanged} />;
+  }
+
   // --- RENDERIZAÇÃO DE TELAS ---
   const renderPaginaPrincipal = () => {
+    
     // Páginas Públicas (Não Logado)
     if (!authToken) {
       if (pagina === 'login') return (
         <motion.div key="login" variants={pageVariants} initial="initial" animate="in" exit="out" transition={pageTransition}>
-          {/* 4. PASSAR O setUser PARA O LOGIN */}
-          <LoginPage setPagina={setPagina} setAuthToken={setAuthToken} setUser={setUser} />
+          <LoginPage onLogin={handleLoginSuccess} setPagina={setPagina} theme={theme}/>
         </motion.div>
       );
       if (pagina === 'register') return (
         <motion.div key="register" variants={pageVariants} initial="initial" animate="in" exit="out" transition={pageTransition}>
-          <RegisterPage setPagina={setPagina} />
+          <RegisterPage setPagina={setPagina} theme={theme}/>
         </motion.div>
       );
       if (pagina === 'validar') return (
@@ -82,7 +116,6 @@ function App() {
     if (authToken) {
       if (pagina === 'eventos') return (
         <motion.div key="eventos" variants={pageVariants} initial="initial" animate="in" exit="out" transition={pageTransition}>
-          {/* 5. PASSAR 'user' e 'setPagina' PARA EVENTOS */}
           <EventosPage user={user} 
             setPagina={setPagina} 
             setEventoEditando={setEventoEditando} 
@@ -100,7 +133,7 @@ function App() {
           <ProfilePage />
         </motion.div>
       );
-      // 6. ADICIONAR A ROTA DE CRIAR EVENTO (SÓ PODE ACESSAR SE FOR ADMIN)
+      
       if (pagina === 'criar-evento' && user && user.is_admin) return (
         <motion.div key="criar-evento" variants={pageVariants} initial="initial" animate="in" exit="out" transition={pageTransition}>
           <CriarEventoPage 
@@ -109,20 +142,20 @@ function App() {
           />
         </motion.div>
       );
-      if (pagina === 'checkin-qr' && user && user.is_admin) return ( // <<< NOVA ROTA
+      if (pagina === 'checkin-qr' && user && user.is_admin) return (
         <motion.div key="checkin-qr" variants={pageVariants} initial="initial" animate="in" exit="out" transition={pageTransition}>
           <CheckinPage 
             setPagina={setPagina} 
-            evento={eventoGerenciando} // Passa o objeto do evento
+            evento={eventoGerenciando} 
           />
         </motion.div>
       );
     }
     
-    // Fallback
+    // Fallback padrão
     return (
       <motion.div key="login-fallback" variants={pageVariants} initial="initial" animate="in" exit="out" transition={pageTransition}>
-        <LoginPage setPagina={setPagina} setAuthToken={setAuthToken} setUser={setUser} />
+        <LoginPage onLogin={handleLoginSuccess} setPagina={setPagina} />
       </motion.div>
     );
   };
@@ -132,62 +165,85 @@ function App() {
     <div className={`App ${theme}`}>
       <header className="App-header">
         
-        <img src={logoNexstage} alt="Nexstage Logo" className="App-logo" />
+        <div className="logo-container">
+            {/* 2. Lógica de troca baseada no tema */}
+            <img 
+              src={theme === 'light' ? logoLight : logoDark} 
+              alt="NexStage" 
+              className="App-logo" 
+            />
+        </div>
         
         {authToken && (
-          // --- NAV LOGADA ---
+          // --- NAV LOGADA (Centralizada via CSS) ---
           <nav className="main-nav">
             <button 
               className={pagina === 'eventos' ? 'active' : ''}
               onClick={() => setPagina('eventos')}
             >
-              Eventos
+              <Calendar size={18} />
+              <span>Eventos</span>
             </button>
+
             <button 
               className={pagina === 'inscricoes' ? 'active' : ''}
               onClick={() => setPagina('inscricoes')}
             >
-              Minhas Inscrições
+              <Ticket size={18} />
+              <span>Minhas Inscrições</span>
             </button>
+
             <button 
               className={pagina === 'perfil' ? 'active' : ''}
               onClick={() => setPagina('perfil')}
             >
-              Meu Perfil
+              <User size={18} />
+              <span>Perfil</span>
             </button>
             
-            {/* 7. BOTÃO DE ADMIN (SÓ APARECE SE user.is_admin === true) */}
+            {/* Botão Admin: Destaque sutil */}
             {user && user.is_admin && (
               <button 
-                className={pagina === 'criar-evento' ? 'active-admin' : 'btn-admin'}
+                className={`btn-admin ${pagina === 'criar-evento' ? 'active' : ''}`}
                 onClick={() => setPagina('criar-evento')}
+                title="Área Administrativa"
               >
-                <PlusCircle size={16} />
-                Novo Evento
+                <PlusCircle size={18} />
+                <span>Evento</span>
               </button>
             )}
           </nav>
         )}
         
         {!authToken && (
-           // --- NAV PÚBLICA (BOTÃO DE VALIDAR) ---
+           // --- NAV PÚBLICA (Não logado) ---
           <nav className="main-nav">
              <button 
               className={pagina === 'validar' ? 'active' : ''}
               onClick={() => setPagina('validar')}
             >
-              Validar Certificado
+              <FileCheck size={18} />
+              <span>Validar certificado</span>
+            </button>
+             <button 
+              className={pagina === 'login' ? 'active' : ''}
+              onClick={() => setPagina('login')}
+            >
+              <LogIn size={18} />
+              <span>Login</span>
             </button>
           </nav>
         )}
 
+        {/* Ações à Direita */}
         <div className="header-actions">
           <motion.button 
             onClick={toggleTheme} 
             className="theme-toggle"
             whileTap={{ scale: 0.9, rotate: 15 }}
+            title={theme === 'light' ? "Modo Escuro" : "Modo Claro"}
           >
-            {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
+            {theme === 'light' ? <Moon size={20} /> : <Sun size={20} />}
           </motion.button>
           
           {authToken && (
@@ -195,8 +251,10 @@ function App() {
               onClick={handleLogout} 
               className="btn-logout"
               {...buttonHoverTap}
+              title="Sair do sistema"
             >
-              <LogOut size={16} /> Sair
+              <LogOut size={16} />
+              <span>Sair</span>
             </motion.button>
           )}
         </div>

@@ -1,127 +1,115 @@
-// main/db/queries-users.js
-/**
- * Query Object — USUÁRIOS (Offline)
- *
- * Este módulo centraliza TODAS as operações SQL relacionadas a usuários
- * armazenados no banco local SQLite.
- *
- * Benefícios:
- *   - Nenhum SQL espalhado pelos IPCs
- *   - Testável: cada função pode ser mockada e testada isoladamente
- *   - Mantém consistência entre sync e offline
- */
-
+// app-local/src/main/db/queries-users.js
+const { getDB } = require("./db");
 const { createLogger } = require("../logger");
-const logger = createLogger("queries-users");
+const logger = createLogger("query-users");
 
-module.exports = function UsersRepository(db) {
-  return {
-    /* ---------------------------------------------------
-       CREATE — Cria usuário local
-    ---------------------------------------------------- */
-    createLocalUser(nome, email, senha) {
-      logger.info("create_local_user_attempt", { nome, email });
+function findUserByUsername(username) {
+  return new Promise((resolve, reject) => {
+    const db = getDB();
+    // Busca por username OU email para garantir o match no login offline
+    const sql = `SELECT * FROM usuarios WHERE username = ? OR email = ?`;
+    db.get(sql, [username, username], (err, row) => {
+      if (err) reject(err);
+      else resolve(row);
+    });
+  });
+}
 
-      try {
-        const result = db.run(
-          `
-            INSERT INTO usuarios (nome, email, senha, sincronizado)
-            VALUES (?, ?, ?, 0)
-          `,
-          [nome, email, senha]
-        );
-
-        logger.info("create_local_user_success", {
-          id_local: result.lastInsertRowid,
-          email
-        });
-
-        return result.lastInsertRowid;
-      } catch (err) {
-        logger.error("create_local_user_error", { error: err.message });
-        throw err;
+function createUserOffline(user) {
+  return new Promise((resolve, reject) => {
+    const db = getDB();
+    const sql = `
+      INSERT INTO usuarios (
+        username, nome, email, cpf, telefone, endereco, senha_hash, 
+        sync_status, last_modified
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending_create', ?)
+    `;
+    const now = new Date().toISOString();
+    const params = [
+      user.username, user.nome, user.email, user.cpf, 
+      user.telefone, user.endereco, user.senha_hash, now
+    ];
+    db.run(sql, params, function(err) {
+      if (err) {
+        logger.error("create_user_failed", { error: err.message });
+        reject(err);
+      } else {
+        resolve({ id_local: this.lastID, ...user });
       }
-    },
+    });
+  });
+}
 
+// --- NOVO: Salva usuário vindo do servidor (Sync Download) ---
+function upsertUserFromServer(user) {
+  return new Promise((resolve, reject) => {
+    const db = getDB();
+    const sql = `
+      INSERT INTO usuarios (server_id, username, nome, email, cpf, sync_status, last_modified)
+      VALUES (?, ?, ?, ?, ?, 'synced', ?)
+      ON CONFLICT(server_id) DO UPDATE SET
+        username = excluded.username,
+        nome = excluded.nome,
+        email = excluded.email,
+        cpf = excluded.cpf,
+        sync_status = 'synced',
+        last_modified = excluded.last_modified
+    `;
+    
+    const now = new Date().toISOString();
+    // Garante que username não seja nulo (usa email como fallback)
+    const username = user.username || user.email;
+    
+    const params = [
+      user.id, username, user.full_name || user.nome, user.email, user.cpf, now
+    ];
 
-    /* ---------------------------------------------------
-       READ — Buscar usuário por ID local
-    ---------------------------------------------------- */
-    getByLocalId(id_local) {
-      return db.get(
-        `SELECT * FROM usuarios WHERE id_local = ?`,
-        [id_local]
-      );
-    },
+    db.run(sql, params, function(err) {
+      if (err) reject(err);
+      else resolve(this.lastID || user.id);
+    });
+  });
+}
 
+function updateUserServerId(idLocal, idServer) {
+  return new Promise((resolve, reject) => {
+    const db = getDB();
+    const sql = `UPDATE usuarios SET server_id = ?, sync_status = 'synced' WHERE id_local = ?`;
+    db.run(sql, [idServer, idLocal], function(err) {
+      if (err) reject(err); else resolve(this.changes);
+    });
+  });
+}
 
-    /* ---------------------------------------------------
-       READ — Buscar usuário por server_id
-    ---------------------------------------------------- */
-    getByServerId(server_id) {
-      return db.get(
-        `SELECT * FROM usuarios WHERE server_id = ?`,
-        [server_id]
-      );
-    },
+function getPendingUsers() {
+  return new Promise((resolve, reject) => {
+    const db = getDB();
+    db.all("SELECT * FROM usuarios WHERE sync_status != 'synced'", [], (err, rows) => {
+      if (err) reject(err); else resolve(rows);
+    });
+  });
+}
 
+// Retorna mapa de ServerID -> LocalID para vincular inscrições
+function getServerIdMap() {
+  return new Promise((resolve, reject) => {
+    const db = getDB();
+    db.all("SELECT server_id, id_local FROM usuarios WHERE server_id IS NOT NULL", [], (err, rows) => {
+      if (err) reject(err);
+      else {
+        const map = {};
+        rows.forEach(r => map[r.server_id] = r.id_local);
+        resolve(map);
+      }
+    });
+  });
+}
 
-    /* ---------------------------------------------------
-       READ — Buscar por email (único)
-    ---------------------------------------------------- */
-    getByEmail(email) {
-      return db.get(
-        `SELECT * FROM usuarios WHERE email = ?`,
-        [email]
-      );
-    },
-
-
-    /* ---------------------------------------------------
-       READ — Listar todos
-    ---------------------------------------------------- */
-    listAll() {
-      return db.all(`SELECT * FROM usuarios ORDER BY id_local DESC`);
-    },
-
-
-    /* ---------------------------------------------------
-       READ — Listar pendentes de sincronização
-    ---------------------------------------------------- */
-    listPendingSync() {
-      return db.all(
-        `SELECT * FROM usuarios WHERE sincronizado = 0 ORDER BY id_local ASC`
-      );
-    },
-
-
-    /* ---------------------------------------------------
-       UPDATE — Marcar usuário como sincronizado
-    ---------------------------------------------------- */
-    markAsSynced(id_local, server_id) {
-      logger.info("local_user_mark_synced", { id_local, server_id });
-
-      return db.run(
-        `
-          UPDATE usuarios
-          SET sincronizado = 1,
-              server_id = ?
-          WHERE id_local = ?
-        `,
-        [server_id, id_local]
-      );
-    },
-
-
-    /* ---------------------------------------------------
-       VALIDAÇÃO — Verificar duplicidade local
-    ---------------------------------------------------- */
-    existsEmail(email) {
-      const row = db.get(
-        `SELECT 1 FROM usuarios WHERE email = ? LIMIT 1`,
-        [email]
-      );
-      return !!row;
-    }
-  };
+module.exports = { 
+  findUserByUsername, 
+  createUserOffline, 
+  upsertUserFromServer, // Novo
+  updateUserServerId,
+  getPendingUsers,
+  getServerIdMap // Novo
 };

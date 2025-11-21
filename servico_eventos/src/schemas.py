@@ -1,6 +1,6 @@
 # servico_eventos/src/schemas.py
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from typing import Optional, List
 from datetime import datetime
 from models import InscricaoStatus, PresencaOrigem
@@ -41,8 +41,7 @@ class Evento(EventoBase):
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class EventoUpdate(BaseModel):
     """Campos opcionais para atualização"""
@@ -54,6 +53,28 @@ class EventoUpdate(BaseModel):
 
 
 # ============================================================
+#  CERTIFICADOS (Definido antes para ser usado em InscricaoDetalhes)
+# ============================================================
+
+class Certificado(BaseModel):
+    id: int
+    codigo_unico: str
+    data_emissao: Optional[datetime] = None
+    model_config = ConfigDict(from_attributes=True)
+
+
+class CertificadoValidacaoRequest(BaseModel):
+    codigo: str = Field(..., min_length=10, max_length=64)
+
+
+class CertificadoValidacaoResponse(BaseModel):
+    valido: bool
+    evento: Optional[str] = None
+    usuario: Optional[str] = None
+    data_emissao: Optional[datetime] = None
+
+
+# ============================================================
 #  INSCRIÇÕES
 # ============================================================
 
@@ -62,17 +83,10 @@ class InscricaoBase(BaseModel):
 
 
 class InscricaoCreate(InscricaoBase):
-    """
-    Inscrição feita pelo próprio usuário.
-    usuario_id vem do token.
-    """
     pass
 
 
 class InscricaoAdminCreate(InscricaoBase):
-    """
-    Inscrição criada pelo administrador para outro usuário.
-    """
     usuario_id: int
 
 
@@ -86,24 +100,21 @@ class Inscricao(BaseModel):
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class InscricaoDetalhes(Inscricao):
     """
-    Inscrição com detalhes completos do evento: usada nas telas de usuário.
+    Inscrição com detalhes completos.
+    IMPORTANTE: O campo 'certificado' é essencial para o Frontend exibir o botão de download.
     """
     evento: Optional[Evento] = None
     checkin_realizado: bool = False
+    certificado: Optional[Certificado] = None
 
 
 class InscricaoCancelamento(BaseModel):
-    """
-    Modelo para cancelar uma inscrição.
-    """
     justificativa: Optional[str] = Field(None, max_length=300)
-
     _sanitize = field_validator("justificativa", mode="before")(strip)
 
 
@@ -112,18 +123,11 @@ class InscricaoCancelamento(BaseModel):
 # ============================================================
 
 class PresencaCreate(BaseModel):
-    """
-    Criar presença (check-in).
-    O atendente registra via inscricao_id.
-    """
     inscricao_id: int
     origem: PresencaOrigem = PresencaOrigem.ONLINE
 
 
 class PresencaOfflineSync(BaseModel):
-    """
-    Usado no modo offline para sincronizar múltiplas presenças.
-    """
     inscricao_id: int
     data_checkin: datetime
     origem: PresencaOrigem = PresencaOrigem.OFFLINE
@@ -138,40 +142,7 @@ class Presenca(BaseModel):
     data_checkin: Optional[datetime] = None
     created_at: Optional[datetime] = None
 
-    class Config:
-        from_attributes = True
-
-
-# ============================================================
-#  CERTIFICADOS
-# ============================================================
-
-class Certificado(BaseModel):
-    id: int
-    inscricao_id: int
-    evento_id: int
-    codigo_unico: str
-    data_emissao: datetime
-
-    class Config:
-        from_attributes = True
-
-
-class CertificadoValidacaoRequest(BaseModel):
-    """
-    API pública para validar um certificado.
-    """
-    codigo: str = Field(..., min_length=10, max_length=64)
-
-
-class CertificadoValidacaoResponse(BaseModel):
-    """
-    Retorno da validação do certificado.
-    """
-    valido: bool
-    evento: Optional[str] = None
-    usuario: Optional[str] = None
-    data_emissao: Optional[datetime] = None
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ============================================================
@@ -179,59 +150,42 @@ class CertificadoValidacaoResponse(BaseModel):
 # ============================================================
 
 class SyncPayload(BaseModel):
-    """
-    Payload enviado pelo app offline para sincronizar.
-    """
     presencas: List[PresencaOfflineSync]
     timestamp_cliente: datetime
+
 
 # ============================================================
 #  CHECK-IN QR CODE
 # ============================================================
 
 class CheckinTokenCreate(BaseModel):
-    """
-    Payload para a criação de um novo token de check-in.
-    """
     evento_id: int = Field(..., description="ID do evento para gerar o token.")
     duracao_minutos: Optional[int] = Field(60, gt=0, description="Duração de validade do token em minutos.")
 
 
 class CheckinTokenResponse(BaseModel):
-    """
-    Resposta da API após a geração do token.
-    """
     token: str
     url_publica: str = Field(..., description="URL completa que deve ser codificada no QR Code.")
     data_expiracao: datetime
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class CheckinQRCodeResult(BaseModel):
-    """
-    Resultado após consumir o QR Code.
-    """
     status: str = "success"
     message: str
     inscricao_id: int
     presenca_registrada: bool = False
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class TokenAndUserCheckin(BaseModel):
-    """Payload para validação do token e registro de presença."""
     token: UUID
-    # O app local precisará saber qual usuário está fazendo o check-in.
     user_id: int = Field(..., description="ID do usuário que está fazendo o check-in.")
 
 class PresencaResponse(BaseModel):
-    """Esquema de resposta simplificado para confirmação da presença."""
     id: int
     inscricao_id: int
     data_registro: datetime
     status: str = Field(..., description="Mensagem de status do check-in.")
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

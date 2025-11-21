@@ -4,17 +4,26 @@ const { createLogger } = require("../logger");
 
 const logger = createLogger("api-service");
 
-// Endereço do Nginx (Gateway)
-const BASE_URL = "http://localhost";
-
-console.log(`[API] Inicializando Axios com Base URL: ${BASE_URL}`);
+// FORÇA IPv4: Evita que o Node tente ::1 (IPv6) e falhe silenciosamente
+const BASE_URL = "http://127.0.0.1:80";
 
 const api = axios.create({
   baseURL: BASE_URL,
-  timeout: 10000, 
+  timeout: 15000, // Aumentei para 15s para garantir
   headers: { "Content-Type": "application/json" },
 });
 
+// Interceptor para Logar a Requisição (Debug de Saída)
+api.interceptors.request.use(config => {
+  logger.info(`api_req_start`, { 
+    method: config.method?.toUpperCase(), 
+    url: config.url,
+    baseURL: config.baseURL 
+  });
+  return config;
+}, error => Promise.reject(error));
+
+// Interceptor de Resposta (Sem mascarar o erro original)
 api.interceptors.response.use(
   (response) => response,
   (error) => {
@@ -22,15 +31,20 @@ api.interceptors.response.use(
     const method = error.config?.method?.toUpperCase();
     
     if (error.response) {
-      logger.warn(`api_error [${method} ${url}]`, {
+      // O servidor respondeu (chegou no Nginx), mas com erro (4xx, 5xx)
+      logger.warn(`api_error_response [${method} ${url}]`, {
         status: error.response.status,
         data: error.response.data
       });
     } else if (error.request) {
-      logger.error(`api_network_error [${method} ${url}]`, { message: "Sem resposta do servidor." });
+      // A requisição foi feita mas não houve resposta (Nginx fora do ar ou Rede inacessível)
+      logger.error(`api_no_response [${method} ${url}]`, { message: "Sem resposta do Nginx (Docker)." });
     } else {
+      // Erro na configuração da requisição (antes de sair)
       logger.error(`api_setup_error`, { message: error.message });
     }
+    
+    // IMPORTANTE: Retorna o erro original para o IPC capturar a mensagem real
     return Promise.reject(error);
   }
 );
@@ -38,7 +52,6 @@ api.interceptors.response.use(
 module.exports = {
   // --- AUTH ---
   async login(username, password) {
-    // Usa URLSearchParams para enviar como application/x-www-form-urlencoded (Padrão OAuth2)
     const formData = new URLSearchParams();
     formData.append("username", username);
     formData.append("password", password);
@@ -50,9 +63,7 @@ module.exports = {
   },
 
   // --- SYNC DOWNLOAD (GET) ---
-  
   async getEventos(token) {
-    // Eventos geralmente é público ou comum, mantemos /eventos
     const response = await api.get("/eventos", {
       headers: { Authorization: `Bearer ${token}` },
     });
@@ -60,8 +71,6 @@ module.exports = {
   },
 
   async getAllUsers(token) {
-    // Tenta buscar todos os usuários. Se /usuarios não retornar lista completa, 
-    // verifique se existe /admin/usuarios no seu backend python.
     const response = await api.get("/usuarios", {
       headers: { Authorization: `Bearer ${token}` },
     });
@@ -69,8 +78,6 @@ module.exports = {
   },
 
   async getAllInscricoes(token) {
-    // CORREÇÃO CRÍTICA: Mudado de /inscricoes para /admin/inscricoes
-    // A rota raiz /inscricoes dava 405 (Method Not Allowed)
     const response = await api.get("/admin/inscricoes", {
       headers: { Authorization: `Bearer ${token}` },
     });
@@ -78,9 +85,7 @@ module.exports = {
   },
 
   // --- SYNC UPLOAD (POST) ---
-
   async registerUser(token, userData) {
-    // Criação de usuário continua na rota padrão
     const response = await api.post("/usuarios", userData, {
       headers: { Authorization: `Bearer ${token}` },
     });
@@ -88,23 +93,14 @@ module.exports = {
   },
 
   async createUserAdmin(token, nome, email, senha) {
-    // CORREÇÃO DO ERRO 422:
-    // O banco local usa: nome, email, senha
-    // A API Python exige: username, email, password (e talvez full_name)
-    
     const payload = {
-      username: email,      // Em muitos sistemas, username = email
+      username: email,
       email: email,
-      password: senha,      // Traduzindo 'senha' -> 'password'
-      full_name: nome,      // Traduzindo 'nome' -> 'full_name' (se o backend suportar)
-      is_active: true,      // Garante que o usuário já nasce ativo
+      password: senha,
+      full_name: nome,
+      is_active: true,
       is_superuser: false
     };
-
-    // Log para debug (opcional)
-    logger.info("api_create_user_payload", { username: payload.username });
-
-    // Envia para a rota de usuários
     const response = await api.post("/usuarios", payload, {
       headers: { Authorization: `Bearer ${token}` },
     });
@@ -112,37 +108,51 @@ module.exports = {
   },
 
   async createInscricaoAdmin(token, evento_id_server, usuario_server_id) {
-    // CORREÇÃO: Sync Upload também deve usar a rota admin para garantir permissão
-    // ou criar inscrições em nome de outros usuários
-    // Ajuste o corpo do JSON conforme o schema do seu Python (evento_id vs evento_id_server)
+    // Payload ajustado para o endpoint /admin/inscricoes
     const payload = {
       evento_id: evento_id_server,
-      usuario_id: usuario_server_id // Alguns backends pedem 'participante_id' ou pegam do token
+      usuario_id: usuario_server_id
     };
-
-    // Tenta na rota admin primeiro, pois estamos inscrevendo *outra* pessoa
     const response = await api.post("/admin/inscricoes", payload, {
       headers: { Authorization: `Bearer ${token}` },
     });
     return response.data;
   },
 
-  async registrarCheckinAdmin(token, inscricao_id) {    
-    const agora = new Date().toISOString();
+  async registrarCheckinAdmin(token, payloadOuId) {    
+    let payload;
+    // Aceita array (Lote) ou ID único
+    if (Array.isArray(payloadOuId)) {
+       payload = {
+         presencas: payloadOuId,
+         timestamp_cliente: new Date().toISOString()
+       };
+    } else {
+       payload = {
+         presencas: [{ inscricao_id: payloadOuId, data_checkin: new Date().toISOString() }],
+         timestamp_cliente: new Date().toISOString()
+       };
+    }
 
-    const payload = {
-      presencas: [
-        { 
-          inscricao_id: inscricao_id,
-          data_checkin: agora // <--- CAMPO QUE FALTAVA
-        }
-      ],
-      timestamp_cliente: agora
-    };
-
-    logger.info("api_sync_presenca_payload", payload);
+    logger.info("sending_checkin_sync", { qtd: payload.presencas.length });
     
     const response = await api.post("/admin/sync/presencas", payload, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+
+  async cancelarInscricao(token, idInscricaoServer) {
+    // PATCH /inscricoes/{id}/cancelar
+    const response = await api.patch(`/inscricoes/${idInscricaoServer}/cancelar`, {}, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+
+  async deletarPresenca(token, idPresencaServer) {
+    // DELETE /admin/presencas/{id}
+    const response = await api.delete(`/admin/presencas/${idPresencaServer}`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     return response.data;
@@ -151,31 +161,25 @@ module.exports = {
   // --- UTILS ---
   async getUserByEmail(token, email) {
       try {
-        const response = await api.get(`/usuarios?email=${email}`, {
+        // Busca filtrada
+        const response = await api.get(`/usuarios`, {
             headers: { Authorization: `Bearer ${token}` }
         });
-        if (Array.isArray(response.data) && response.data.length > 0) {
-            return response.data[0];
-        }
-        return null;
+        // Filtra no cliente se a API não suportar ?email=...
+        const found = response.data.find(u => u.email === email);
+        return found || null;
       } catch (e) {
           return null;
       }
   },
 
   async getCurrentUser(token) {
-      // Rota para pegar dados do usuário logado ("me")
-      // Geralmente /usuarios/me ou /auth/me. Ajuste conforme seu Python.
-      // Vou tentar um GET em /usuarios com filtro, ou assumir que o login já devolveu.
-      // Se não tiver endpoint /me, tente:
       try {
-          // Tenta endpoint padrão do FastAPI Users
           const response = await api.get("/usuarios/me", {
              headers: { Authorization: `Bearer ${token}` }
           });
           return response.data;
       } catch (e) {
-          // Fallback: retorna null e o auth-service lida com isso
           return null;
       }
   }

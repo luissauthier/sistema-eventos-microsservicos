@@ -9,3 +9,6 @@ httpx
 fpdf
 pydantic
 python-json-logger
+reportlab==4.0.7
+qrcode==7.4.2
+pillow==10.2.0

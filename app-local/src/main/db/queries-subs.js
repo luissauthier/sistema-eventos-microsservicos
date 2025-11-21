@@ -1,173 +1,86 @@
-// main/db/queries-subs.js
-/**
- * Query Object — INSCRIÇÕES (Offline)
- *
- * Centraliza todas as operações relacionadas às inscrições
- * armazenadas no SQLite.
- *
- * Abrange:
- *   - criação offline
- *   - sincronização (upload)
- *   - upsert vindo do servidor (download)
- *   - buscas e validações
- */
+// app-local/src/main/db/queries-subs.js
+const { getDB } = require("./db");
 
-const { createLogger } = require("../logger");
-const logger = createLogger("queries-subs");
+function createSubscription(usuarioIdLocal, eventoIdServer) {
+  return new Promise((resolve, reject) => {
+    const db = getDB();
+    const sql = `INSERT INTO inscricoes (usuario_id_local, evento_id_server, status, data_inscricao, sync_status, last_modified) VALUES (?, ?, 'ativa', ?, 'pending_create', ?)`;
+    const now = new Date().toISOString();
+    db.run(sql, [usuarioIdLocal, eventoIdServer, now, now], function(err) {
+       if(err) reject(err); else resolve(this.lastID);
+    });
+  });
+}
 
-module.exports = function SubsRepository(db) {
-  return {
+function upsertSubscriptionFromServer(insc, localUserId) {
+  return new Promise((resolve, reject) => {
+    const db = getDB();
+    const sql = `
+      INSERT INTO inscricoes (server_id, usuario_id_local, evento_id_server, status, sync_status, last_modified)
+      VALUES (?, ?, ?, ?, 'synced', ?)
+      ON CONFLICT(server_id) DO UPDATE SET status = excluded.status, sync_status = 'synced', last_modified = excluded.last_modified
+    `;
+    const now = new Date().toISOString();
+    db.run(sql, [insc.id, localUserId, insc.evento_id, (insc.status||'ativa').toLowerCase(), now], function(err) {
+       if(err) reject(err); else resolve(this.lastID);
+    });
+  });
+}
 
-    /* ---------------------------------------------------
-       CREATE — Criar inscrição offline
-    ---------------------------------------------------- */
-    createLocalInscricao(usuario_id_local, evento_id_server) {
-      logger.info("create_local_inscricao_attempt", {
-        usuario_id_local,
-        evento_id_server
-      });
+function getSubscriptionsByUser(usuarioIdLocal) {
+  return new Promise((resolve, reject) => {
+    const db = getDB();
+    // REMOVIDO o filtro "AND i.status = 'ativa'" para trazer também as canceladas
+    const sql = `
+      SELECT i.*, e.nome as evento_nome, e.data_evento 
+      FROM inscricoes i
+      JOIN eventos e ON i.evento_id_server = e.id_server
+      WHERE i.usuario_id_local = ?
+    `;
+    db.all(sql, [usuarioIdLocal], (err, rows) => {
+      if (err) reject(err); else resolve(rows);
+    });
+  });
+}
 
-      try {
-        const res = db.run(
-          `
-            INSERT INTO inscricoes (usuario_id_local, evento_id_server, sincronizado)
-            VALUES (?, ?, 0)
-          `,
-          [usuario_id_local, evento_id_server]
-        );
+function getPendingSubscriptions() {
+  return new Promise((resolve, reject) => {
+    const db = getDB();
+    // CORREÇÃO: Agora busca 'pending_create' E 'pending_update'
+    const sql = `
+      SELECT i.*, u.server_id as usuario_server_id 
+      FROM inscricoes i
+      JOIN usuarios u ON i.usuario_id_local = u.id_local
+      WHERE (i.sync_status = 'pending_create' OR i.sync_status = 'pending_update') 
+      AND u.server_id IS NOT NULL
+    `;
+    db.all(sql, [], (err, rows) => {
+      if (err) reject(err); else resolve(rows);
+    });
+  });
+}
 
-        logger.info("create_local_inscricao_success", {
-          id_local: res.lastInsertRowid
-        });
+function markSubscriptionSynced(idLocal, idServer) {
+  return new Promise((resolve, reject) => {
+    const db = getDB();
+    db.run("UPDATE inscricoes SET server_id = ?, sync_status = 'synced' WHERE id_local = ?", [idServer, idLocal], (err) => err ? reject(err) : resolve(true));
+  });
+}
 
-        return res.lastInsertRowid;
+function getPendingCancellations() {
+  return new Promise((resolve, reject) => {
+    const db = getDB();
+    // Busca inscrições marcadas para cancelar que já tenham ID no server
+    const sql = `SELECT * FROM inscricoes WHERE sync_status = 'pending_cancel' AND server_id IS NOT NULL`;
+    db.all(sql, [], (err, rows) => err ? reject(err) : resolve(rows));
+  });
+}
 
-      } catch (err) {
-        logger.error("create_local_inscricao_error", { error: err.message });
-        throw err;
-      }
-    },
-
-
-    /* ---------------------------------------------------
-       UPSERT — Vindo do servidor (sync DOWNLOAD)
-       Inscrição idempotente: se existir, mantém.
-    ---------------------------------------------------- */
-    upsertFromServer(inscricao) {
-      const { id, usuario_id, evento_id } = inscricao;
-
-      logger.info("sub_upsert_from_server", {
-        server_id: id,
-        usuario_id,
-        evento_id
-      });
-
-      try {
-        db.run(
-          `
-            INSERT INTO inscricoes (server_id, usuario_id_local, evento_id_server, sincronizado)
-            SELECT ?, u.id_local, ?, 1
-            FROM usuarios u
-            WHERE u.server_id = ?
-            ON CONFLICT(server_id) DO NOTHING
-          `,
-          [id, evento_id, usuario_id]
-        );
-
-      } catch (err) {
-        logger.error("sub_upsert_from_server_error", {
-          server_id: id,
-          error: err.message
-        });
-        throw err;
-      }
-    },
-
-
-    /* ---------------------------------------------------
-       READ — Buscar inscrição por ID local
-    ---------------------------------------------------- */
-    getByLocalId(id_local) {
-      return db.get(
-        `SELECT * FROM inscricoes WHERE id_local = ?`,
-        [id_local]
-      );
-    },
-
-
-    /* ---------------------------------------------------
-       READ — Buscar inscrição por server_id
-    ---------------------------------------------------- */
-    getByServerId(server_id) {
-      return db.get(
-        `SELECT * FROM inscricoes WHERE server_id = ?`,
-        [server_id]
-      );
-    },
-
-
-    /* ---------------------------------------------------
-       READ — Listar TODAS as inscrições
-    ---------------------------------------------------- */
-    listAll() {
-      return db.all(`
-        SELECT *
-        FROM inscricoes
-        ORDER BY id_local DESC
-      `);
-    },
-
-
-    /* ---------------------------------------------------
-       READ — Listar inscrições pendentes de sync
-    ---------------------------------------------------- */
-    listPendingSync() {
-      return db.all(`
-        SELECT i.id_local, i.evento_id_server, u.server_id AS usuario_server_id
-        FROM inscricoes i
-        JOIN usuarios u ON u.id_local = i.usuario_id_local
-        WHERE i.sincronizado = 0
-          AND u.server_id IS NOT NULL
-      `);
-    },
-
-
-    /* ---------------------------------------------------
-       UPDATE — Marcar inscrição como sincronizada
-    ---------------------------------------------------- */
-    markAsSynced(id_local, server_id) {
-      logger.info("local_inscricao_mark_synced", { id_local, server_id });
-
-      return db.run(
-        `
-          UPDATE inscricoes
-          SET sincronizado = 1,
-              server_id = ?
-          WHERE id_local = ?
-        `,
-        [server_id, id_local]
-      );
-    },
-
-
-    /* ---------------------------------------------------
-       CHECK — Verificar se existe inscrição local para (usuario, evento)
-       Evita duplicidade offline.
-    ---------------------------------------------------- */
-    existsLocal(usuario_id_local, evento_id_server) {
-      const row = db.get(
-        `
-          SELECT 1
-          FROM inscricoes
-          WHERE usuario_id_local = ?
-            AND evento_id_server = ?
-          LIMIT 1
-        `,
-        [usuario_id_local, evento_id_server]
-      );
-
-      return !!row; // true/false
-    }
-
-  };
+module.exports = { 
+  createSubscription, 
+  upsertSubscriptionFromServer,
+  getSubscriptionsByUser, 
+  getPendingSubscriptions,
+  markSubscriptionSynced,
+  getPendingCancellations
 };

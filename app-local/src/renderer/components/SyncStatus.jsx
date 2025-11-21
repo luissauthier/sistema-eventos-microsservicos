@@ -7,10 +7,13 @@ export function SyncStatus() {
   const [msg, setMsg] = useState('');
 
   const handleSync = async () => {
+    console.log("[FRONT] Botão clicado! Chamando API...");
     setSyncState('syncing');
     try {
       // 1. Envia dados locais (Upload)
+      console.log("[FRONT] Invocando sincronizarUpload...");
       const resUp = await window.api.sincronizarUpload();
+      console.log("[FRONT] Resposta Upload:", resUp);
       
       // 2. Baixa atualizações (Download)
       const resDown = await window.api.sincronizarDownload();

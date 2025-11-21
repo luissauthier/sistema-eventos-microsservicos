@@ -1,276 +1,178 @@
-// main/ipc/ipc-offline.js
-/**
- * IPC Handler — Operações Offline
- *
- * Este módulo controla TODAS as operações locais feitas com SQLite:
- * - criar usuário local
- * - criar inscrição local
- * - registrar presença local
- * - consultar dados locais
- */
-
+// app-local/src/main/ipc/ipc-offline.js
 const { ipcMain } = require("electron");
 const { createLogger } = require("../logger");
-const { generateTempPassword } = require("../../../utils/password-gen");
+
+// Importa as queries refatoradas da Etapa 1
+const qUsers = require("../db/queries-users");
+const qEvents = require("../db/queries-events");
+const qSubs = require("../db/queries-subs");
+const qCheckins = require("../db/queries-checkins");
+const { getDB } = require("../db/db");
+
+const { generateTempPassword } = require("../utils/password-gen");
 
 const logger = createLogger("ipc-offline");
 
-// Recebe a instância do banco (db) como argumento
 module.exports = function registerOfflineHandlers(db) {
 
-  /* ---------------------------------------------------
-     OFFLINE 1 — Criar Usuário Local
-  ---------------------------------------------------- */
-  ipcMain.handle("cadastrar-usuario-local", async (event, usuario) => {
-    const { nome, email, senha } = usuario;
-
-    logger.info("local_user_create_attempt", { email });
-
-    if (!nome || !email || !senha) {
-      return { success: false, message: "Dados insuficientes." };
-    }
-
-    try {
-      const result = await db.run(
-        `INSERT INTO usuarios (nome, email, senha, sincronizado)
-         VALUES (?, ?, ?, 0)`,
-        [nome, email, senha]
-      );
-
-      logger.info("local_user_created", {
-        id_local: result.lastID,
-        email
-      });
-
-      return { success: true, id_local: result.lastID };
-
-    } catch (err) {
-      logger.error("local_user_create_error", { error: err.message });
-      return { success: false, message: err.message };
-    }
-  });
-
-  /* ---------------------------------------------------
-     OFFLINE 2 — Criar Inscrição Local
-  ---------------------------------------------------- */
-  ipcMain.handle("inscrever-local", async (event, inscricao) => {
-    const { usuario_id_local, evento_id_server } = inscricao;
-
-    logger.info("local_inscricao_create_attempt", {
-      usuario_id_local,
-      evento_id_server
-    });
-
-    if (!usuario_id_local || !evento_id_server) {
-      return { success: false, message: "Dados insuficientes." };
-    }
-
-    try {
-      const result = await db.run(
-        `INSERT INTO inscricoes (usuario_id_local, evento_id_server, sincronizado)
-         VALUES (?, ?, 0)`,
-        [usuario_id_local, evento_id_server]
-      );
-
-      logger.info("local_inscricao_created", {
-        id_local: result.lastID,
-        usuario_id_local,
-        evento_id_server
-      });
-
-      return { success: true, id_local: result.lastID };
-
-    } catch (err) {
-      logger.error("local_inscricao_create_error", { error: err.message });
-      return { success: false, message: err.message };
-    }
-  });
-
-  /* ---------------------------------------------------
-     OFFLINE 3 — Registrar Presença Local
-  ---------------------------------------------------- */
-  ipcMain.handle("registrar-presenca-local", async (event, inscricaoIdLocal) => {
-    logger.info("local_presenca_attempt", { inscricaoIdLocal });
-
-    if (!inscricaoIdLocal) {
-      return { success: false, message: "ID de inscrição inválido." };
-    }
-
-    try {
-      const result = await db.run(
-        `INSERT INTO presencas (inscricao_id_local, sincronizado)
-         VALUES (?, 0)`,
-        [inscricaoIdLocal]
-      );
-
-      logger.info("local_presenca_registered", {
-        id_local: result.lastID,
-        inscricaoIdLocal
-      });
-
-      return { success: true, id_local: result.lastID };
-
-    } catch (err) {
-      logger.error("local_presenca_error", { error: err.message });
-      return { success: false, message: err.message };
-    }
-  });
-
-  /* ---------------------------------------------------
-   OFFLINE SUPER — Fluxo Completo de Check-in Rápido
-   Cria usuário -> Inscreve -> Marca Presença
-   Tudo em uma transação só. Essencial para o Caso 2.
-  ---------------------------------------------------- */
-  ipcMain.handle("realizar-checkin-rapido", async (event, payload) => {
-    const { nome, email, eventoIdServer } = payload; // Senha pode ser gerada auto ou vazia p/ completar depois
-    
-    logger.info("checkin_rapido_start", { email, eventoIdServer });
-
-    let tx;
-    let senhaGerada = null;
-    try {
-      tx = await db.transactionStart();
-
-      // 1. Criar Usuário (ou buscar se já existe localmente por email)
-      // Nota: Se existir, pegamos o ID. Se não, criamos.
-      let usuarioIdLocal;
-      const usuarioExistente = await db.get("SELECT id_local FROM usuarios WHERE email = ?", [email]);
-      
-      if (usuarioExistente) {
-        usuarioIdLocal = usuarioExistente.id_local;
-      } else {
-        senhaGerada = generateTempPassword(); 
-        const resUser = await db.run(
-          `INSERT INTO usuarios (nome, email, senha, sincronizado) VALUES (?, ?, ?, 0)`,
-          [nome, email, senhaGerada]
-        );
-        usuarioIdLocal = resUser.lastID;
-      }
-
-      // 2. Criar Inscrição
-      // Verifica se já não está inscrito para evitar duplicação
-      let inscricaoIdLocal;
-      const inscricaoExistente = await db.get(
-        "SELECT id_local FROM inscricoes WHERE usuario_id_local = ? AND evento_id_server = ?", 
-        [usuarioIdLocal, eventoIdServer]
-      );
-
-      if (inscricaoExistente) {
-        inscricaoIdLocal = inscricaoExistente.id_local;
-      } else {
-        const resInsc = await db.run(
-          `INSERT INTO inscricoes (usuario_id_local, evento_id_server, sincronizado) VALUES (?, ?, 0)`,
-          [usuarioIdLocal, eventoIdServer]
-        );
-        inscricaoIdLocal = resInsc.lastID;
-      }
-
-      // 3. Registrar Presença
-      // Verifica se já tem presença
-      const presencaExistente = await db.get(
-        "SELECT id_local FROM presencas WHERE inscricao_id_local = ?", 
-        [inscricaoIdLocal]
-      );
-
-      if (!presencaExistente) {
-        await db.run(
-          `INSERT INTO presencas (inscricao_id_local, sincronizado) VALUES (?, 0)`,
-          [inscricaoIdLocal]
-        );
-      }
-
-      await db.transactionCommit(tx);
-      
-      logger.info("checkin_rapido_success", { email });
-      return { 
-        success: true, 
-        message: "Check-in realizado com sucesso!",
-        senhaTemp: senhaGerada
-      };
-
-    } catch (err) {
-      logger.error("checkin_rapido_error", { error: err.message });
-      if (tx) await db.transactionRollback(tx);
-      return { success: false, message: "Erro ao realizar check-in rápido: " + err.message };
-    }
-  });
-
-  /* ---------------------------------------------------
-     OFFLINE 4 — Buscar Dados Locais
-  ---------------------------------------------------- */
+  // 1. BUSCAR TUDO (Para preencher a tela inicial)
   ipcMain.handle("buscar-dados-locais", async () => {
     logger.info("local_data_query");
-
     try {
-      const usuarios = await db.all(`SELECT * FROM usuarios`);
-      const eventos = await db.all(`SELECT * FROM eventos ORDER BY data_evento`);
-      const presencas = await db.all(`SELECT * FROM presencas`);
+      const db = getDB();
+      const eventos = await new Promise((res, rej) => db.all("SELECT * FROM eventos ORDER BY data_evento DESC", [], (e,r)=>e?rej(e):res(r)));
+      const usuarios = await new Promise((res, rej) => db.all("SELECT * FROM usuarios", [], (e,r)=>e?rej(e):res(r)));
+      
+      const inscricoes = await new Promise((res, rej) => db.all(`
+          SELECT i.*, u.nome as nome_usuario, u.email as email_usuario 
+          FROM inscricoes i
+          LEFT JOIN usuarios u ON i.usuario_id_local = u.id_local
+      `, [], (e,r)=>e?rej(e):res(r)));
 
-      // Join para trazer nomes bonitos na tela
-      const inscricoes = await db.all(`
-        SELECT
-          i.id_local,
-          i.server_id,
-          i.evento_id_server,
-          u.nome AS nome_usuario,
-          u.email AS email_usuario,
-          e.nome AS nome_evento,
-          i.sincronizado
-        FROM inscricoes i
-        JOIN usuarios u ON u.id_local = i.usuario_id_local
-        JOIN eventos e ON e.id_server = i.evento_id_server
-        ORDER BY i.id_local DESC
-      `);
+      const presencas = await new Promise((res, rej) => 
+        db.all("SELECT * FROM presencas", [], (e,r)=>e?rej(e):res(r))
+      );
 
-      logger.info("local_data_query_success", {
-        eventos: eventos.length,
-        inscricoes: inscricoes.length,
-        presencas: presencas.length,
-      });
-
-      return {
-        success: true,
-        eventos,
-        inscricoes,
-        presencas, 
-        usuarios
-      };
-
+      return { success: true, eventos, usuarios, inscricoes, presencas };
     } catch (err) {
       logger.error("local_data_query_error", { error: err.message });
       return { success: false, message: err.message };
     }
   });
 
-  /* ---------------------------------------------------
-     OFFLINE 5 — Cancelar Check-in (Remover Presença)
-  ---------------------------------------------------- */
-  ipcMain.handle("cancelar-checkin-local", async (event, inscricaoIdLocal) => {
-    logger.info("cancelar_checkin_attempt", { inscricaoIdLocal });
+  // 2. CHECK-IN RÁPIDO (Caso de Uso 2: Cadastro + Inscrição + Presença)
+  ipcMain.handle("realizar-checkin-rapido", async (event, data) => {
+    logger.info("fast_checkin_start", { email: data.email });
+    const db = getDB();
+    
     try {
-      // Remove apenas a presença, mantém a inscrição
-      await db.run("DELETE FROM presencas WHERE inscricao_id_local = ?", [inscricaoIdLocal]);
-      return { success: true };
+      // A. Garante Usuário (Busca ou Cria)
+      let user = await qUsers.findUserByUsername(data.email); // Usamos email como username
+      let senhaTemp = null;
+
+      if (!user) {
+        senhaTemp = generateTempPassword(10);
+        user = await qUsers.createUserOffline({
+            username: data.email,
+            nome: data.nome,
+            email: data.email,
+            senha_hash: senhaTemp,
+            cpf: null, telefone: null, endereco: null
+        });
+      }
+
+      // B. Garante Inscrição
+      // Verifica se já existe inscrição para este user e evento (usando ID do server para o evento)
+      const existingSub = await new Promise((resolve, reject) => {
+          db.get(
+              "SELECT * FROM inscricoes WHERE usuario_id_local = ? AND evento_id_server = ?", 
+              [user.id_local, data.eventoIdServer], 
+              (err, row) => err ? reject(err) : resolve(row)
+          );
+      });
+
+      let subId = existingSub ? existingSub.id_local : null;
+
+      if (!existingSub) {
+          // Cria inscrição offline
+          subId = await qSubs.createSubscription(user.id_local, data.eventoIdServer);
+      } else if (existingSub.status === 'cancelada') {
+          // Reativa se estava cancelada
+          await new Promise((resolve, reject) => {
+             db.run("UPDATE inscricoes SET status = 'ativa', sync_status = 'pending_update' WHERE id_local = ?", 
+             [subId], (err) => err ? reject(err) : resolve());
+          });
+      }
+
+      // C. Registra Presença
+      // Verifica se já tem check-in
+      const existingCheckin = await new Promise((resolve, reject) => {
+          db.get("SELECT * FROM presencas WHERE inscricao_id_local = ?", [subId], (err, row) => err ? reject(err) : resolve(row));
+      });
+
+      if (!existingCheckin) {
+          await qCheckins.createCheckin(subId, 'offline');
+      }
+
+      return { success: true, senhaTemp };
+
     } catch (err) {
+      logger.error("fast_checkin_error", { error: err.message });
       return { success: false, message: err.message };
     }
   });
 
-  /* ---------------------------------------------------
-     OFFLINE 6 — Cancelar Inscrição (Remover Tudo)
-  ---------------------------------------------------- */
-  ipcMain.handle("cancelar-inscricao-local", async (event, inscricaoIdLocal) => {
-    logger.info("cancelar_inscricao_attempt", { inscricaoIdLocal });
-    try {
-      // Remove presença primeiro (cascade manual se o sqlite não tiver FK ativada)
-      await db.run("DELETE FROM presencas WHERE inscricao_id_local = ?", [inscricaoIdLocal]);
-      // Remove inscrição
-      await db.run("DELETE FROM inscricoes WHERE id_local = ?", [inscricaoIdLocal]);
+  // 3. OUTROS HANDLERS (Individuais)
+  ipcMain.handle("registrar-presenca-local", async (event, idLocalInscricao) => {
+      try {
+          await qCheckins.createCheckin(idLocalInscricao, 'offline');
+          return { success: true };
+      } catch (e) { return { success: false, message: e.message }; }
+  });
+
+  ipcMain.handle("cancelar-inscricao-local", async (event, idLocal) => {
+      const db = getDB();
+      return new Promise((resolve, reject) => {
+          db.run(
+            "UPDATE inscricoes SET status = 'cancelada', sync_status = 'pending_cancel' WHERE id_local = ?", 
+            [idLocal],
+            (err) => {
+                if (err) reject(err);
+                else resolve({ success: true });
+            }
+          );
+      });
+  });
+
+  ipcMain.handle("cancelar-checkin-local", async (event, idLocalInscricao) => {
+      const db = getDB();
       
-      return { success: true };
-    } catch (err) {
-      return { success: false, message: err.message };
-    }
+      try {
+          const presenca = await new Promise((res, rej) => 
+             db.get("SELECT * FROM presencas WHERE inscricao_id_local = ?", [idLocalInscricao], (e, r) => e ? rej(e) : res(r))
+          );
+
+          if (!presenca) return { success: true };
+
+          if (presenca.sync_status === 'pending_create') {
+              // Se ainda não subiu, deleta fisicamente
+              await new Promise((res, rej) => 
+                 db.run("DELETE FROM presencas WHERE id_local = ?", [presenca.id_local], (e) => e ? rej(e) : res())
+              );
+          } else {
+              // Se já subiu (tem server_id ou sync='synced'), marca para deletar no server
+              await new Promise((res, rej) => 
+                 db.run("UPDATE presencas SET sync_status = 'pending_delete' WHERE id_local = ?", [presenca.id_local], (e) => e ? rej(e) : res())
+              );
+          }
+          return { success: true };
+      } catch (err) { return { success: false, message: err.message }; }
   });
 
+  // 6. Inscrever / Reativar Localmente
+  ipcMain.handle("inscrever-local", async (event, data) => {
+    try {
+        const db = getDB();
+        
+        // Cenário A: Reativar uma inscrição cancelada (O Renderer manda { idLocal: ... })
+        if (data.idLocal) {
+            return new Promise((resolve, reject) => {
+                db.run(
+                    "UPDATE inscricoes SET status = 'ativa', sync_status = 'pending_update' WHERE id_local = ?",
+                    [data.idLocal],
+                    (err) => err ? reject(err) : resolve({ success: true })
+                );
+            });
+        }
+        
+        // Cenário B: Criar nova inscrição (Se necessário no futuro)
+        // Atualmente, o fluxo de "Check-in Rápido" já cria inscrições novas.
+        // Se você quiser permitir inscrição pura sem check-in aqui, usaria qSubs.createSubscription
+        
+        return { success: false, message: "Operação inválida: ID local necessário para reativar." };
+
+    } catch (err) { 
+        return { success: false, message: err.message }; 
+    }
+  });
 };

@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { CheckCircle, Clock, X, Award, AlertTriangle } from 'lucide-react'; // Adicionei AlertTriangle
+import { CheckCircle, Clock, X, AlertTriangle, Download, Calendar} from 'lucide-react'; // Adicionei AlertTriangle
 import { buttonHoverTap } from '../App';
 import api from '../api';
-import CertificateModal from './CertificateModal';
 
 // Animações
 const containerVariants = {
@@ -20,20 +19,13 @@ function InscricoesPage() {
   const [inscricoes, setInscricoes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [showModal, setShowModal] = useState(false);
-  const [currentCert, setCurrentCert] = useState(null);
 
   // Função para buscar os dados da API (substitui 'fetchData')
   const carregarInscricoes = async () => {
     try {
       setLoading(true);
-      
-      // 1. Busca as inscrições (com detalhes do evento)
       const inscResponse = await api.get('/inscricoes/me');
       setInscricoes(inscResponse.data);
-      
-      // 2. REMOVIDO: Não usamos mais dados mockados de presença
-      
     } catch (err) {
       setError('Falha ao carregar suas inscrições.');
       console.error(err);
@@ -45,68 +37,42 @@ function InscricoesPage() {
   // Executa o carregarInscricoes quando o componente carregar
   useEffect(() => {
     carregarInscricoes();
-  }, []); // [] = Executa apenas uma vez
+  }, []);
 
   // Função de Cancelar (API Real, agora chamando carregarInscricoes)
   const handleCancelarInscricao = async (id) => {
-    // Confirmação antes de cancelar
     if (!window.confirm("Tem certeza que deseja cancelar sua inscrição?")) {
         return;
     }
-
     try {
-        await api.patch(`/inscricoes/${id}/cancelar`, {
-            justificativa: "Cancelado pelo usuário via portal"
-        });
-
-        alert("Inscrição cancelada com sucesso!");
-        
-        // Recarrega a lista para atualizar a tela
+        await api.patch(`/inscricoes/${id}/cancelar`, { justificativa: "Portal Web" });
+        alert("Inscrição cancelada.");
         carregarInscricoes();
-
     } catch (error) {
-        console.error("Erro ao cancelar:", error);
-        alert("Não foi possível cancelar a inscrição. Tente novamente.");
+        alert("Erro ao cancelar. Tente novamente.");
     }
   };
-  
-  // Função de Emitir Certificado (API Real)
-  const handleEmitirCertificado = async (inscricao) => {
-    // TODO: Esta lógica precisa ser definida.
-    // O backend não parece ter uma rota de *emissão* para usuário (só admin)
-    // A rota /certificados é para validar.
-    alert("Funcionalidade de emissão/download ainda não implementada.");
 
-    /* try {
-      const response = await api.post('/certificados/emitir/me', { ... });
-      alert(`Certificado emitido!`);
-    } catch (err) {
-      alert('Erro ao emitir. (Você precisa ter o check-in confirmado!)');
-    }
-    */
-  };
-
-  const handleVerCertificado = async (inscricao) => {
-    try {
-      // 1. Busca todos os certificados do usuário
-      const response = await api.get('/certificados/me');
-      const meusCertificados = response.data;
-
-      // 2. Tenta encontrar o certificado deste evento
-      const cert = meusCertificados.find(c => c.evento_id === inscricao.evento_id);
-
-      if (cert) {
-        setCurrentCert(cert);
-        setShowModal(true);
-      } else {
-        alert("Certificado ainda não gerado pelo sistema. Se você já fez check-in, aguarde alguns minutos.");
-      }
-    } catch (err) {
-      console.error(err);
-      alert('Erro ao buscar certificado.');
+  const handleAbrirCertificado = (inscricao) => {
+    // Verifica se o objeto certificado existe e tem o código
+    if (inscricao.certificado && inscricao.certificado.codigo_unico) {
+      
+      // Pega a URL base da API (ex: http://localhost/)
+      const baseUrl = api.defaults.baseURL || 'http://localhost';
+      // Garante que não tenha barra duplicada
+      const cleanBase = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
+      
+      // Monta a URL direta para o endpoint de download
+      const downloadUrl = `${cleanBase}/certificados/download/${inscricao.certificado.codigo_unico}`;
+      
+      // Abre em nova aba
+      window.open(downloadUrl, '_blank');
+    
+    } else {
+      // Se caiu aqui, o Auto-Repair ainda está rodando ou falhou
+      alert("O certificado está sendo gerado. Por favor, atualize a página (F5) e tente novamente.");
     }
   };
-  
 
   if (loading) return <p>A carregar inscrições...</p>;
   if (error) return <p className="form-error">{error}</p>;
@@ -118,80 +84,93 @@ function InscricoesPage() {
       initial="hidden"
       animate="visible"
     >
-      <h2>Minhas Inscrições</h2>
+      <div className="eventos-header" style={{ marginBottom: '24px', borderBottom: 'none' }}>
+        <h2>Minhas Inscrições</h2>
+      </div>
+      
       {inscricoes.length === 0 ? (
-        <p>Você ainda não se inscreveu em nenhum evento.</p>
+        <p className="empty-state">
+           Você ainda não se inscreveu em nenhum evento.
+           <br/>
+           <span style={{ fontSize: '0.9rem', marginTop: '8px', display: 'block' }}>
+             Acesse a aba "Eventos" para começar.
+           </span>
+        </p>
       ) : (
-        inscricoes.map(inscricao => {
-          
-          // === LÓGICA DE ESTADO (Lendo dados reais do Backend) ===
-          const hasCheckin = inscricao.checkin_realizado === true;
-          const status = inscricao.status.toLowerCase(); // 'ativa' ou 'cancelada'
-          // =======================================================
+        <div className="lista-eventos" style={{ gridTemplateColumns: '1fr' }}> {/* Lista vertical */}
+          {inscricoes.map(inscricao => {
+            const hasCheckin = inscricao.checkin_realizado === true;
+            const status = inscricao.status ? inscricao.status.toLowerCase() : 'ativa';
+            const isCancelled = status === 'cancelada';
+            
+            return (
+              <motion.div 
+                key={inscricao.id} 
+                className="card-inscricao"
+                variants={itemVariants}
+                // Adicionamos estilo condicional para cancelado via style ou classe extra se preferir
+                style={isCancelled ? { backgroundColor: '#fff5f5', borderColor: '#feb2b2' } : {}}
+              >
+                {/* Coluna Esquerda: Info do Evento */}
+                <div style={{ flex: 1 }}>
+                  <h3 style={{ color: isCancelled ? 'var(--text-secondary)' : 'var(--text-primary)' }}>
+                    {inscricao.evento.nome}
+                  </h3>
+                  
+                  <p className="data-evento">
+                    <Calendar size={16} />
+                    {new Date(inscricao.evento.data_evento).toLocaleDateString()}
+                    {' • '}
+                    {new Date(inscricao.evento.data_evento).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                  </p>
+                  
+                  {/* Tags de Status */}
+                  <div className="status-container" style={{ marginBottom: 0 }}>
+                    {isCancelled ? (
+                      <span className="status-badge cancelado">
+                        <AlertTriangle size={14} /> Inscrição Cancelada
+                      </span>
+                    ) : hasCheckin ? (
+                      <span className="status-badge sucesso">
+                        <CheckCircle size={14} /> Presença Confirmada
+                      </span>
+                    ) : (
+                      <span className="status-badge pendente">
+                        <Clock size={14} /> Aguardando Check-in
+                      </span>
+                    )}
+                  </div>
+                </div>
 
-          return (
-            <motion.div 
-              key={inscricao.id} 
-              className="card-inscricao"
-              // Adiciona uma classe se estiver cancelado para "apagar" o card
-              style={{ opacity: status === 'cancelada' ? 0.6 : 1.0 }} 
-              variants={itemVariants}
-            >
-              <h3>{inscricao.evento.nome}</h3>
-              
-              {/* === LÓGICA DE TAGS DE STATUS === */}
-              {status === 'cancelada' ? (
-                <span className="status-checkin" style={{color: '#4B5563', borderColor: '#D1D5DB'}}>
-                  <AlertTriangle size={16} /> Inscrição Cancelada
-                </span>
-              ) : hasCheckin ? (
-                <span className="status-checkin checkin-ok">
-                  <CheckCircle size={16} /> Presença Registrada
-                </span>
-              ) : (
-                <span className="status-checkin checkin-pendente">
-                  <Clock size={16} /> Aguardando Check-in
-                </span>
-              )}
-
-              {/* === AÇÕES DO CARD (Botões) === */}
-              <div className="card-actions">
-                
-                {/* Botão de Cancelar: Só aparece se ATIVA e SEM CHECKIN */}
-                {status === 'ativa' && !hasCheckin && (
-                  <motion.button 
-                    className="btn-cancelar-small"
-                    onClick={() => handleCancelarInscricao(inscricao.id)}
-                    {...buttonHoverTap}
-                  >
-                    <X size={14} /> Cancelar
-                  </motion.button>
-                )}
-                
-                {/* Botão de Certificado: Só aparece se TIVER CHECKIN */}
-                {hasCheckin && (
-                   <motion.button 
-                    className="btn-certificado"
-                    onClick={() => handleVerCertificado(inscricao)}
-                    {...buttonHoverTap}
-                  >
-                    <Award size={14} /> Ver Certificado
-                  </motion.button>
-                )}
-
-                {/* Se estiver cancelada, nenhum botão aparece */}
-              </div>
-              
-            </motion.div>
-          );
-        })
-      )}
-
-      {showModal && (
-        <CertificateModal 
-          certificado={currentCert} 
-          onClose={() => setShowModal(false)} 
-        />
+                {/* Coluna Direita: Ações */}
+                <div className="card-actions" style={{ marginTop: 0, flexDirection: 'column', alignItems: 'flex-end', gap: '12px' }}>
+                  
+                  {status === 'ativa' && !hasCheckin && (
+                    <motion.button 
+                      className="btn-cancelar-small"
+                      onClick={() => handleCancelarInscricao(inscricao.id)}
+                      {...buttonHoverTap}
+                      title="Cancelar minha participação"
+                    >
+                      <X size={16} /> Cancelar Inscrição
+                    </motion.button>
+                  )}
+                  
+                  {hasCheckin && (
+                     <motion.button 
+                      className="btn-certificado"
+                      onClick={() => handleAbrirCertificado(inscricao)}
+                      {...buttonHoverTap}
+                    >
+                      <Download size={18} strokeWidth={2.5} />
+                      <span>Certificado</span>
+                    </motion.button>
+                  )}
+                </div>
+              </motion.div>
+            );
+          })}
+        </div>
       )}
     </motion.div>
   );

@@ -1,62 +1,19 @@
 # servico_certificados/src/models.py
-
-"""
-Modelagem profissional para o serviço de certificados.
-"""
-
-from sqlalchemy import (
-    Column, Integer, String, DateTime, Boolean, UniqueConstraint
-)
-from sqlalchemy.orm import relationship
+from sqlalchemy import Column, Integer, String, DateTime, Text, JSON
 from sqlalchemy.sql import func
 from database import Base
-import uuid
-from sqlalchemy.dialects.postgresql import UUID
 
-
-# ============================================================
-#  UTILITÁRIO: GERAÇÃO DE CÓDIGO ÚNICO
-# ============================================================
-
-def gerar_codigo_unico():
-    return uuid.uuid4()
-
-
-# ============================================================
-#  MODELO PRINCIPAL: CERTIFICADO
-# ============================================================
-
-class Certificado(Base):
-    __tablename__ = "certificados"
+class CertificadoMetadata(Base):
+    __tablename__ = "certificados_metadata"
 
     id = Column(Integer, primary_key=True, index=True)
-
-    # Código de validação público
-    codigo_unico = Column(UUID(as_uuid=True), unique=True, index=True, default=gerar_codigo_unico)
-
-    # Data e metadados
-    data_emissao = Column(DateTime(timezone=True), server_default=func.now())
-    origem_automatica = Column(Boolean, default=True)  # Auto (check-in) ou manual (admin)
+    codigo_unico = Column(String(64), unique=True, index=True, nullable=False)
     
-    # Identificador interno (sem foreign key!)
-    inscricao_id = Column(Integer, nullable=False, index=True)
-    usuario_id = Column(Integer, nullable=False, index=True)
-    evento_id = Column(Integer, nullable=False, index=True)
+    participante_nome = Column(String(200), nullable=False)
+    evento_nome = Column(String(200), nullable=False)
+    evento_data = Column(String(50), nullable=False)
 
-    # SNAPSHOT — estes dados nunca mudam após emissão
-    usuario_nome = Column(String, nullable=False)
-    usuario_email = Column(String, nullable=False)
-
-    evento_nome = Column(String, nullable=False)
-    evento_data = Column(DateTime(timezone=True), nullable=True)
-
-    template_certificado = Column(String(50), default="default", nullable=False)
-
-    # (futuro) nome do template, assinatura digital, QR code
-    template_nome = Column(String, nullable=True)
-    assinatura_digital = Column(String, nullable=True)
-
-    # Restrição: 1 certificado por inscrição
-    __table_args__ = (
-        UniqueConstraint("inscricao_id", name="uq_certificado_inscricao"),
-    )
+    template_nome = Column(String(50), default="default", nullable=False) 
+    
+    dados_extras = Column(JSON, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())

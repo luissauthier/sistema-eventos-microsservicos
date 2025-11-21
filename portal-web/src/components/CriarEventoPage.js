@@ -1,7 +1,7 @@
-// src/pages/CriarEventoPage.js
+// portal-web/src/components/CriarEventoPage.js
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Calendar, FileText, Type, Save } from 'lucide-react';
+import { ArrowLeft, Calendar, FileText, Type, Save, Layout } from 'lucide-react'; // Adicionei Layout e mantive Type
 import api from '../api';
 import { buttonHoverTap } from '../App';
 
@@ -15,9 +15,9 @@ const CriarEventoPage = ({ setPagina, eventoEditando }) => {
 
   const [template, setTemplate] = useState('default');
 
-  // Preenche o formulário se estiver editando
   useEffect(() => {
     if (eventoEditando) {
+      // Formata para o input datetime-local (YYYY-MM-DDTHH:mm)
       const dataFormatada = eventoEditando.data_evento
         ? new Date(eventoEditando.data_evento).toISOString().slice(0, 16)
         : '';
@@ -75,122 +75,124 @@ const CriarEventoPage = ({ setPagina, eventoEditando }) => {
   };
 
   return (
-    <div className="conteudo">
+    <div className="login-container" style={{ alignItems: 'flex-start', paddingTop: '20px' }}>
       <motion.div
+        className="login-card" // Reutiliza o estilo do card centralizado
+        style={{ maxWidth: '600px', width: '100%', textAlign: 'left' }}
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4 }}
       >
-
-        {/* Card de formulário reaproveitando .form-container */}
-        <div className="form-container">
-          <h2>
+        
+        {/* Cabeçalho do Form */}
+        <div style={{ display: 'flex', alignItems: 'center', marginBottom: '24px', gap: '12px' }}>
             <motion.button
               onClick={() => setPagina('eventos')}
-              className="btn-voltar form-voltar"
+              className="btn-logout" // Reutiliza estilo de botão outline
+              style={{ border: 'none', padding: '8px' }}
               {...buttonHoverTap}
+              title="Voltar"
             >
-              <ArrowLeft size={16} />
+              <ArrowLeft size={20} />
             </motion.button>
-            {eventoEditando ? 'Editar Evento' : 'Criar Novo Evento'}
-          </h2>
+            
+            <h2 style={{ margin: 0, fontSize: '1.5rem' }}>
+                {eventoEditando ? 'Você está editando um evento!' : 'Vamos criar um novo evento?'}
+            </h2>
+        </div>
 
-          <p style={{ 
-            fontSize: 'var(--fs-small)', 
-            color: 'var(--text-secondary)', 
-            marginBottom: 'var(--space-6)' 
-          }}>
+        <p style={{ color: 'var(--text-secondary)', marginBottom: '32px' }}>
             {eventoEditando
-              ? 'Atualize as informações do evento abaixo.'
-              : 'Preencha os campos para adicionar um novo evento ao calendário.'}
-          </p>
+              ? 'Atualize as informações abaixo.'
+              : 'Preencha os dados para adicionar um novo evento ao calendário.'}
+        </p>
 
-          <form onSubmit={handleSubmit}>
-            {/* Nome */}
-            <div className="form-group">
-              <label>Nome do Evento</label>
-              <div className="input-with-icon">
+        <form onSubmit={handleSubmit}>
+          
+          {/* Nome */}
+          <div className="form-group input-with-icon">
+            <label>Nome do Evento</label>
+            <div style={{ position: 'relative' }}>
+                <Type className="input-left-icon" size={18} />
                 <input
-                  type="text"
-                  name="nome"
-                  value={formData.nome}
-                  onChange={handleChange}
-                  placeholder="Ex: Workshop de React Avançado"
-                  required
+                    type="text"
+                    name="nome"
+                    value={formData.nome}
+                    onChange={handleChange}
+                    placeholder="Ex: Workshop de Inovação"
+                    required
+                    autoFocus
                 />
-              </div>
             </div>
+          </div>
 
-            {/* Data e Hora */}
-            <div className="form-group">
-              <label>Data e Hora</label>
-              <div className="input-with-icon">
+          {/* Data e Hora */}
+          <div className="form-group input-with-icon">
+            <label>Data e Hora</label>
+            <div style={{ position: 'relative' }}>
+                <Calendar className="input-left-icon" size={18} />
                 <input
-                  type="datetime-local"
-                  name="data_evento"
-                  value={formData.data_evento}
-                  onChange={handleChange}
-                  required
+                    type="datetime-local"
+                    name="data_evento"
+                    value={formData.data_evento}
+                    onChange={handleChange}
+                    required
                 />
-              </div>
             </div>
+          </div>
 
-            {/* Descrição */}
-            <div className="form-group">
-              <label>
-                Descrição <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                  (opcional)
-                </span>
-              </label>
-              <div className="input-with-icon textarea-wrapper">
+          {/* Descrição */}
+          <div className="form-group input-with-icon textarea-wrapper">
+            <label>
+              Descrição <span style={{fontWeight: 'normal', color: 'var(--text-secondary)'}}>(Opcional)</span>
+            </label>
+            <div style={{ position: 'relative' }}>
+                {/* O CSS .textarea-wrapper .input-left-icon já ajusta o top: 20px */}
                 <FileText className="input-left-icon" size={18} />
                 <textarea
-                  name="descricao"
-                  rows={4}
-                  value={formData.descricao}
-                  onChange={handleChange}
-                  placeholder="Detalhes sobre local, palestrantes, tópicos abordados..."
+                    name="descricao"
+                    rows={4}
+                    value={formData.descricao}
+                    onChange={handleChange}
+                    placeholder="Detalhes sobre local, palestrantes, tópicos..."
+                    // Removido style={{ paddingLeft: '42px' }} - O CSS global já resolve
                 />
-              </div>
             </div>
+          </div>
 
-            {/* Template de Certificado */}
-            <div className="form-group">
-              <label>Estilo do Certificado</label>
-              <select
-                value={template}
-                onChange={(e) => setTemplate(e.target.value)}
-              >
-                <option value="default">Clássico (Azul/Univates)</option>
-                <option value="dark">Dark Mode (Tecnologia)</option>
-                <option value="minimal">Minimalista (P&B)</option>
-              </select>
-              <small style={{ 
-                color: 'var(--text-secondary)', 
-                fontSize: 'var(--fs-small)' 
-              }}>
-                Isso definirá o visual do certificado para todos os participantes.
-              </small>
+          {/* Template */}
+          <div className="form-group input-with-icon">
+            <label>Estilo do Certificado</label>
+            <div style={{ position: 'relative' }}>
+                <Layout className="input-left-icon" size={18} />
+                <select
+                    value={template}
+                    onChange={(e) => setTemplate(e.target.value)}
+                    // Removido style={{ paddingLeft: '42px' }} - O CSS global já resolve
+                >
+                    <option value="default">Corporativo (Padrão)</option>
+                    <option value="tech">Tech / Inovação (Escuro)</option>
+                    <option value="saude">Saúde & Bem-Estar (Clean)</option>
+                    <option value="educacao">Acadêmico / Educação (Clássico)</option>
+                </select>
             </div>
+            <small style={{ display: 'block', marginTop: '8px', color: 'var(--text-secondary)' }}>
+                Isso define o layout do PDF gerado para os participantes.
+            </small>
+          </div>
 
-            {/* Botão salvar reaproveitando .btn-primary */}
-            <motion.button
-              type="submit"
-              disabled={loading}
-              className="btn-primary"
-              {...(!loading ? buttonHoverTap : {})}
-            >
-              {loading ? (
-                'Processando...'
-              ) : (
-                <>
-                  <Save size={18} style={{ marginRight: 8 }} />
-                  {eventoEditando ? 'Salvar Alterações' : 'Criar Evento'}
-                </>
-              )}
-            </motion.button>
-          </form>
-        </div>
+          {/* Botão Salvar */}
+          <motion.button
+            type="submit"
+            disabled={loading}
+            className="btn-login" // Reutiliza o botão principal largo
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginTop: '24px' }}
+            {...(!loading ? buttonHoverTap : {})}
+          >
+            {loading ? 'Salvando...' : <><Save size={18} /> {eventoEditando ? 'Salvar' : 'Publicar evento'}</>}
+          </motion.button>
+
+        </form>
       </motion.div>
     </div>
   );

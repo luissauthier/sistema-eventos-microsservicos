@@ -2,6 +2,7 @@
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from typing import Optional
+from datetime import datetime
 
 
 # ============================================================
@@ -30,6 +31,10 @@ class UserBase(BaseModel):
     cpf: Optional[str] = Field(None, max_length=14)
     telefone: Optional[str] = Field(None, max_length=20)
     endereco: Optional[str] = Field(None, max_length=255)
+
+    must_change_password: bool = False
+    is_active: bool = True
+    is_verified: bool = False
     # --------------------
 
     # --- Sanitização padrão ---
@@ -79,6 +84,9 @@ class User(BaseModel):
     endereco: Optional[str]
     is_active: bool
     is_verified: bool
+    must_change_password: bool
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
@@ -102,12 +110,18 @@ class UserAdmin(User):
 # ============================================================
 
 class UserUpdate(BaseModel):
+    password: Optional[str] = None
+    username: Optional[str] = Field(None, min_length=3, max_length=50)
     full_name: Optional[str] = Field(None, min_length=2, max_length=100)
     email: Optional[EmailStr] = None
 
     cpf: Optional[str] = Field(None, max_length=14)
     telefone: Optional[str] = Field(None, max_length=20)
     endereco: Optional[str] = Field(None, max_length=255)
+
+    must_change_password: Optional[bool] = None
+    is_active: Optional[bool] = None
+    is_verified: Optional[bool] = None
 
     @field_validator("full_name", "email", "cpf", "telefone", "endereco", mode="before")
     def sanitize_strings(cls, v):

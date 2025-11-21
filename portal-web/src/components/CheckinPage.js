@@ -1,175 +1,201 @@
+// portal-web/src/components/CheckinPage.js
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { RefreshCw, Clock, QrCode } from 'lucide-react';
+import { RefreshCw, Clock, QrCode, ArrowLeft, Printer, AlertCircle } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import api from '../api';
 import { buttonHoverTap } from '../App';
 
-// Função auxiliar para formatar a data de expiração
+// Função auxiliar para formatar data
 const formatExpiration = (dateStr) => {
-    const date = new Date(dateStr);
-    return date.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'medium' });
+  if (!dateStr) return '';
+  return new Date(dateStr).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 };
 
 function CheckinPage({ setPagina, evento }) {
-    // Estado para o evento (passado via prop)
-    const eventoId = evento?.id;
-    const eventoNome = evento?.nome || "Evento Desconhecido";
+  const eventoId = evento?.id;
+  const eventoNome = evento?.nome || "Evento Desconhecido";
+  const [tokenData, setTokenData] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [duracaoMinutos, setDuracaoMinutos] = useState(60);
+  const [error, setError] = useState('');
+  const [timeLeft, setTimeLeft] = useState(0);
 
-    // Estados do Token
-    const [tokenData, setTokenData] = useState(null);
-    const [loading, setLoading] = useState(false);
-    const [duracaoMinutos, setDuracaoMinutos] = useState(60); // Padrão 60 minutos
-    const [error, setError] = useState('');
-    const [success, setSuccess] = useState('');
-    const [timeLeft, setTimeLeft] = useState(0);
+  // Timer de contagem regressiva
+  useEffect(() => {
+    if (!tokenData || !tokenData.data_expiracao) return;
+    const interval = setInterval(() => {
+      const now = new Date().getTime();
+      const expiration = new Date(tokenData.data_expiracao).getTime();
+      const diff = Math.max(0, Math.floor((expiration - now) / 1000));
+      setTimeLeft(diff);
+      if (diff <= 0) clearInterval(interval);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [tokenData]);
 
-    // Efeito para o contador de tempo restante
-    useEffect(() => {
-        if (!tokenData || !tokenData.data_expiracao) return;
+  useEffect(() => { if (eventoId) handleGenerateToken(); }, [eventoId]);
 
-        const expirationTime = new Date(tokenData.data_expiracao).getTime();
+  const handleGenerateToken = async (e) => {
+    e?.preventDefault();
+    setError('');
+    setLoading(true);
+    setTokenData(null);
 
-        const updateTime = () => {
-            const now = new Date().getTime();
-            const diff = expirationTime - now;
-            
-            if (diff > 0) {
-                setTimeLeft(Math.floor(diff / 1000));
-            } else {
-                setTimeLeft(0);
-                // O token expirou no cliente
-                if (tokenData.data_expiracao && diff <= 0) {
-                    setError("O token expirou. Por favor, gere um novo.");
-                }
-            }
-        };
-
-        // Atualiza imediatamente e depois a cada segundo
-        updateTime();
-        const interval = setInterval(updateTime, 1000);
-
-        return () => clearInterval(interval);
-    }, [tokenData]);
-
-    const handleGenerateToken = async (e) => {
-        e?.preventDefault(); // Para evitar refresh se chamado via form
-        setError('');
-        setSuccess('');
-        setTokenData(null);
-        setLoading(true);
-
-        try {
-            const response = await api.post('/admin/checkin/generate', {
-                evento_id: eventoId,
-                duracao_minutos: duracaoMinutos
-            });
-            
-            setTokenData(response.data);
-            setSuccess(`Novo token gerado com sucesso! Válido por ${duracaoMinutos} minutos.`);
-
-        } catch (err) {
-            setError('Falha ao gerar o token. Verifique se o evento existe ou o token de Admin.');
-            console.error(err);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    // Gera o token automaticamente na primeira carga (ou sempre que o eventoId mudar)
-    useEffect(() => {
-        if (eventoId) {
-            handleGenerateToken();
-        }
-    }, [eventoId]); 
-
-
-    // Formata o tempo restante (MM:SS)
-    const formatTime = (seconds) => {
-        const minutes = Math.floor(seconds / 60);
-        const secs = seconds % 60;
-        return `${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-    };
-
-
-    if (!eventoId) {
-        return <p className="form-error">Nenhum evento selecionado para check-in.</p>;
+    try {
+      const response = await api.post('/admin/checkin/generate', {
+        evento_id: eventoId,
+        duracao_minutos: duracaoMinutos
+      });
+      setTokenData(response.data);
+    } catch (err) {
+      console.error(err);
+      setError('Falha ao gerar token de acesso.');
+    } finally {
+      setLoading(false);
     }
-    
-    // =========================================================
-    // RENDERIZAÇÃO
-    // =========================================================
+  };
 
-    return (
-        <div className="form-container" style={{ maxWidth: '700px' }}>
-            <h2><QrCode size={24} style={{ marginBottom: '-5px', marginRight: '5px' }} />Check-in QR Code: {eventoNome}</h2>
-            <p>Este código permite o **Self-Check-in** dos participantes via Portal Web.</p>
+  const formatTime = (seconds) => {
+    const m = Math.floor(seconds / 60).toString().padStart(2, '0');
+    const s = (seconds % 60).toString().padStart(2, '0');
+    return `${m}:${s}`;
+  };
 
-            {/* Configuração de Duração */}
-            <form onSubmit={handleGenerateToken} style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '20px' }}>
-                <div className="form-group" style={{ flexGrow: 1, marginBottom: 0 }}>
-                    <label>Duração do Token (minutos):</label>
-                    <input 
-                        type="number" 
-                        min="1" 
-                        max="120"
-                        value={duracaoMinutos} 
-                        onChange={(e) => setDuracaoMinutos(parseInt(e.target.value))}
-                        disabled={loading}
-                    />
-                </div>
-                <motion.button 
-                    type="submit" 
-                    className="btn-primary"
-                    {...buttonHoverTap}
-                    style={{ marginTop: 'auto', display: 'flex', alignItems: 'center', gap: '5px' }}
-                    disabled={loading}
-                >
-                    <RefreshCw size={16} /> {tokenData ? 'Gerar Novo' : 'Gerar Token'}
-                </motion.button>
-            </form>
-            
-            {loading && <p className="form-info">A gerar token de segurança...</p>}
-            {error && <p className="form-error">{error}</p>}
-            {success && tokenData && (
-                <div className="card-inscricao" style={{ backgroundColor: '#e6ffe6', borderColor: 'var(--green)', padding: '20px' }}>
-                    <div style={{ textAlign: 'center' }}>
-                        
-                        {/* QR CODE - Desenha a URL Pública */}
-                        {tokenData.url_publica && (
-                            <div style={{ padding: '10px', backgroundColor: 'white', display: 'inline-block', border: '1px solid #ddd' }}>
-                                <QRCodeSVG value={tokenData.url_publica} size={256} level="H" />
-                            </div>
-                        )}
-                        
-                        <h3 style={{ marginTop: '15px' }}>Código de Check-in Ativo</h3>
-                        
-                        <p style={{ color: timeLeft > 60 ? 'var(--blue)' : 'var(--red)', fontWeight: 'bold' }}>
-                            <Clock size={16} style={{ marginBottom: '-3px', marginRight: '5px' }} />
-                            Tempo Restante: {formatTime(timeLeft)}
-                        </p>
-                        
-                        <small style={{ display: 'block', marginTop: '10px', wordBreak: 'break-all' }}>
-                            <strong>URL Pública:</strong> <a href={tokenData.url_publica} target="_blank" rel="noopener noreferrer">{tokenData.url_publica}</a>
-                        </small>
-                    </div>
-                    
-                    <p style={{ marginTop: '15px', borderTop: '1px dashed #ccc', paddingTop: '10px', textAlign: 'center' }}>
-                        A expirar em: {formatExpiration(tokenData.data_expiracao)}
-                    </p>
-                </div>
-            )}
+  if (!eventoId) return <p className="empty-state">Selecione um evento primeiro.</p>;
 
-            <button 
-                type="button" 
-                className="btn-secondary" 
-                onClick={() => setPagina('eventos')}
-                style={{ marginTop: '20px', width: '100%' }}
+  return (
+    <div className="login-container" style={{ alignItems: 'flex-start', paddingTop: '20px' }}>
+      <motion.div 
+        className="login-card"
+        style={{ maxWidth: '600px', width: '100%', textAlign: 'center' }}
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+      >
+        
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
+           <motion.button 
+             onClick={() => setPagina('eventos')} 
+             className="btn-logout" 
+             style={{ border: 'none', padding: '8px' }}
+             {...buttonHoverTap}
+             title="Voltar"
+           >
+             <ArrowLeft size={20} />
+           </motion.button>
+           <h2 style={{ fontSize: '1.25rem', margin: 0, color: 'var(--primary)' }}>Auto Check-in</h2>
+           <div style={{ width: '36px' }}></div>
+        </div>
+
+        <div style={{ marginBottom: '24px' }}>
+            <h3 style={{ color: 'var(--text-primary)', margin: '0 0 8px 0', fontSize: '1.5rem' }}>{eventoNome}</h3>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
+                Posicione esta tela na entrada do evento para auto-atendimento.
+            </p>
+        </div>
+
+        <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', alignItems: 'end', marginBottom: '32px' }}>
+            <div className="form-group" style={{ marginBottom: 0, textAlign: 'left', width: '120px' }}>
+                <label style={{ fontSize: '0.75rem' }}>Duração (min)</label>
+                <input 
+                    type="number" 
+                    min="10" max="240" 
+                    value={duracaoMinutos} 
+                    onChange={e => setDuracaoMinutos(parseInt(e.target.value))}
+                    style={{ textAlign: 'center', fontWeight: 'bold' }}
+                />
+            </div>
+            <motion.button
+                onClick={handleGenerateToken}
+                disabled={loading}
+                className="btn-login"
+                style={{ width: 'auto', height: '42px', display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: 'var(--primary)' }}
+                {...buttonHoverTap}
             >
-                Voltar para Eventos
+                <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
+                {loading ? '...' : 'Renovar Token'}
+            </motion.button>
+        </div>
+
+        {error && <div className="form-error" style={{marginBottom: '20px'}}>{error}</div>}
+
+        {tokenData && (
+            <div style={{ 
+                backgroundColor: timeLeft > 0 ? '#f8fafc' : '#fff1f2', 
+                border: `2px dashed ${timeLeft > 0 ? 'var(--border-color)' : 'var(--danger)'}`,
+                borderRadius: '16px',
+                padding: '40px 20px',
+                position: 'relative',
+                transition: 'all 0.3s ease'
+            }}>
+                
+                {timeLeft > 0 ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                        <div style={{ 
+                            background: 'white', 
+                            padding: '20px', 
+                            borderRadius: '12px', 
+                            boxShadow: 'var(--shadow-md)',
+                            border: '1px solid var(--border-color)',
+                            marginBottom: '24px'
+                        }}>
+                            <QRCodeSVG value={tokenData.url_publica} size={240} level="H" />
+                        </div>
+                        
+                        <div style={{ 
+                            display: 'flex', 
+                            gap: '32px', 
+                            backgroundColor: 'white', 
+                            padding: '12px 24px', 
+                            borderRadius: '100px',
+                            border: '1px solid var(--border-color)',
+                            boxShadow: 'var(--shadow-sm)'
+                        }}>
+                            <div style={{ textAlign: 'center' }}>
+                                <span style={{ display: 'block', fontSize: '0.65rem', color: 'var(--text-secondary)', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '1px' }}>Expira em</span>
+                                <span style={{ fontSize: '1.25rem', fontFamily: 'monospace', fontWeight: '700', color: timeLeft < 60 ? 'var(--danger)' : 'var(--primary)', lineHeight: 1 }}>
+                                    {formatTime(timeLeft)}
+                                </span>
+                            </div>
+                            <div style={{ width: '1px', background: 'var(--border-color)' }}></div>
+                            <div style={{ textAlign: 'center' }}>
+                                <span style={{ display: 'block', fontSize: '0.65rem', color: 'var(--text-secondary)', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '1px' }}>Válido Até</span>
+                                <span style={{ fontSize: '1.25rem', fontFamily: 'monospace', fontWeight: '700', color: 'var(--text-primary)', lineHeight: 1 }}>
+                                    {formatExpiration(tokenData.data_expiracao)}
+                                </span>
+                            </div>
+                        </div>
+                        
+                        <div style={{ marginTop: '20px', display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
+                            <QrCode size={16} />
+                            <span>Aponte a câmera para ler o código</span>
+                        </div>
+                    </div>
+                ) : (
+                    <div style={{ padding: '40px 0', color: 'var(--danger)' }}>
+                        <div style={{ width: '80px', height: '80px', backgroundColor: '#fee2e2', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px auto' }}>
+                            <AlertCircle size={40} />
+                        </div>
+                        <h3 style={{margin: 0}}>Token Expirado</h3>
+                        <p style={{margin: '8px 0 0 0', opacity: 0.8}}>Gere um novo código para continuar.</p>
+                    </div>
+                )}
+            </div>
+        )}
+        
+        <div style={{ marginTop: '32px' }}>
+            <button 
+                onClick={() => window.print()} 
+                className="btn-logout" 
+                style={{ margin: '0 auto', border: 'none', color: 'var(--primary)', gap: '8px' }}
+            >
+                <Printer size={18} /> Imprimir Cartaz para Totem
             </button>
         </div>
-    );
+
+      </motion.div>
+    </div>
+  );
 }
 
 export default CheckinPage;

@@ -9,7 +9,7 @@
  *   ✔ sem dependências externas pesadas
  */
 
-const { createLogger } = require("../src/main/logger");
+const { createLogger } = require("../logger");
 const logger = createLogger("validators");
 
 // ======================================================

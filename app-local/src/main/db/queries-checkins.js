@@ -1,118 +1,101 @@
-// main/db/queries-checkins.js
-/**
- * Query Object — PRESENÇAS (Offline)
- *
- * Este módulo centraliza TODAS as operações relacionadas
- * ao registro de presenças no SQLite.
- *
- * Abrange:
- *   - registro offline
- *   - busca por inscrição
- *   - listagem completa
- *   - sincronização com servidor
- */
+// app-local/src/main/db/queries-checkins.js
+const { getDB } = require("./db");
 
-const { createLogger } = require("../logger");
-const logger = createLogger("queries-checkins");
+function createCheckin(inscricaoIdLocal, origem = 'offline') {
+  return new Promise((resolve, reject) => {
+    const db = getDB();
+    const sql = `
+      INSERT INTO presencas (
+        inscricao_id_local, data_checkin, origem, sync_status
+      ) VALUES (?, ?, ?, 'pending_create')
+    `;
+    const now = new Date().toISOString();
+    
+    db.run(sql, [inscricaoIdLocal, now, origem], function(err) {
+      if (err) reject(err);
+      else resolve(this.lastID);
+    });
+  });
+}
 
-module.exports = function CheckinsRepository(db) {
-  return {
+function getPendingCheckins() {
+  return new Promise((resolve, reject) => {
+    const db = getDB();
+    // Traz o ID da inscrição no servidor para enviar à API
+    const sql = `
+      SELECT p.*, i.server_id as inscricao_server_id
+      FROM presencas p
+      JOIN inscricoes i ON p.inscricao_id_local = i.id_local
+      WHERE p.sync_status = 'pending_create' AND i.server_id IS NOT NULL
+    `;
+    db.all(sql, [], (err, rows) => {
+      if (err) reject(err);
+      else resolve(rows);
+    });
+  });
+}
 
-    /* ---------------------------------------------------
-       CREATE — Registrar presença local
-    ---------------------------------------------------- */
-    createLocalPresenca(inscricao_id_local) {
-      logger.info("create_local_presenca_attempt", { inscricao_id_local });
-
-      try {
-        const res = db.run(
-          `
-            INSERT INTO presencas (inscricao_id_local, sincronizado)
-            VALUES (?, 0)
-          `,
-          [inscricao_id_local]
-        );
-
-        logger.info("create_local_presenca_success", {
-          id_local: res.lastInsertRowid
+function markCheckinSynced(idLocal, idServer) {
+  return new Promise((resolve, reject) => {
+    const db = getDB();
+    
+    if (idServer) {
+        // Se recebemos um ID novo, atualizamos tudo
+        // IMPORTANTE: Usamos OR IGNORE ou tratamos erro se server_id duplicar (caso raro de sync duplicado)
+        const sql = `UPDATE presencas SET server_id = ?, sync_status = 'synced' WHERE id_local = ?`;
+        db.run(sql, [idServer, idLocal], function(err) {
+            if (err) {
+                // Se der erro de unique (server_id já existe em outro), apenas marca como synced sem mudar o ID
+                if (err.message.includes("UNIQUE constraint")) {
+                    db.run("UPDATE presencas SET sync_status = 'synced' WHERE id_local = ?", [idLocal], e => e ? reject(e) : resolve(true));
+                } else {
+                    reject(err);
+                }
+            } else {
+                resolve(true);
+            }
         });
-
-        return res.lastInsertRowid;
-
-      } catch (err) {
-        logger.error("create_local_presenca_error", {
-          inscricao_id_local,
-          error: err.message
-        });
-        throw err;
-      }
-    },
-
-
-    /* ---------------------------------------------------
-       READ — Buscar presença local por inscrição
-       (útil p/ evitar duplicidade no offline)
-    ---------------------------------------------------- */
-    getByInscricaoLocalId(inscricao_id_local) {
-      return db.get(
-        `
-          SELECT *
-          FROM presencas
-          WHERE inscricao_id_local = ?
-          LIMIT 1
-        `,
-        [inscricao_id_local]
-      );
-    },
-
-
-    /* ---------------------------------------------------
-       READ — Listar todas as presenças locais
-    ---------------------------------------------------- */
-    listAll() {
-      return db.all(
-        `
-          SELECT *
-          FROM presencas
-          ORDER BY id_local DESC
-        `
-      );
-    },
-
-
-    /* ---------------------------------------------------
-       READ — Listar presenças pendentes de sincronização
-    ---------------------------------------------------- */
-    listPendingSync() {
-      return db.all(
-        `
-          SELECT
-            p.id_local,
-            i.server_id AS inscricao_server_id
-          FROM presencas p
-          JOIN inscricoes i ON p.inscricao_id_local = i.id_local
-          WHERE p.sincronizado = 0
-            AND i.server_id IS NOT NULL
-        `
-      );
-    },
-
-
-    /* ---------------------------------------------------
-       UPDATE — Marcar presença como sincronizada
-    ---------------------------------------------------- */
-    markAsSynced(id_local) {
-      logger.info("local_presenca_mark_synced", { id_local });
-
-      return db.run(
-        `
-          UPDATE presencas
-          SET sincronizado = 1
-          WHERE id_local = ?
-        `,
-        [id_local]
-      );
+    } else {
+        // Se NÃO recebemos ID (idServer é null/undefined), apenas marcamos como synced
+        // Isso acontece quando o backend diz "OK" mas não devolve a lista de IDs (idempotência)
+        const sql = `UPDATE presencas SET sync_status = 'synced' WHERE id_local = ?`;
+        db.run(sql, [idLocal], (err) => err ? reject(err) : resolve(true));
     }
+  });
+}
 
-  };
+function updateCheckinStatus(idLocal, status) {
+  return new Promise((resolve, reject) => {
+    const db = getDB();
+    db.run(
+      "UPDATE presencas SET sync_status = ? WHERE id_local = ?", 
+      [status, idLocal], 
+      (err) => err ? reject(err) : resolve(true)
+    );
+  });
+}
+
+function getPendingDeletions() {
+  return new Promise((resolve, reject) => {
+    const db = getDB();
+    // Busca itens marcados para deleção que tenham server_id (já subiram)
+    const sql = `SELECT * FROM presencas WHERE sync_status = 'pending_delete' AND server_id IS NOT NULL`;
+    db.all(sql, [], (err, rows) => err ? reject(err) : resolve(rows));
+  });
+}
+
+function hardDeleteCheckin(idLocal) {
+  return new Promise((resolve, reject) => {
+    const db = getDB();
+    db.run("DELETE FROM presencas WHERE id_local = ?", [idLocal], (err) => err ? reject(err) : resolve(true));
+  });
+}
+
+module.exports = { 
+  createCheckin, 
+  getPendingCheckins, 
+  markCheckinSynced,
+  updateCheckinStatus,
+  getPendingDeletions,
+  hardDeleteCheckin
 };

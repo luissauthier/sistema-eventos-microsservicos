@@ -90,9 +90,14 @@ const ConfirmationModal = ({ isOpen, title, message, onConfirm, onCancel, type =
  * Componente: Badge de Status de Sync
  * ============================================================ */
 const SyncStatusBadge = ({ data }) => {
-  const pendingUsers = data.usuarios?.filter(u => u.sincronizado === 0).length || 0;
-  const pendingSubs = data.inscricoes?.filter(i => i.sincronizado === 0).length || 0;
-  const pendingChecks = data.presencas?.filter(p => p.sincronizado === 0).length || 0;
+  const countPending = (list) => {
+    if (!list || !Array.isArray(list)) return 0;
+    return list.filter(item => item.sync_status && item.sync_status !== 'synced').length;
+  };
+
+  const pendingUsers = countPending(data.usuarios);
+  const pendingSubs = countPending(data.inscricoes);
+  const pendingChecks = countPending(data.presencas);
 
   const totalPending = pendingUsers + pendingSubs + pendingChecks;
 
@@ -104,7 +109,6 @@ const SyncStatusBadge = ({ data }) => {
       </div>
     );
   }
-
   return (
     <div className="flex items-center gap-2 px-3 py-1 bg-amber-50 text-amber-700 rounded-full border border-amber-200 shadow-sm animate-pulse">
       <CloudOff size={14} />
@@ -116,42 +120,50 @@ const SyncStatusBadge = ({ data }) => {
 /* ============================================================
  * Componente: Card de Evento (Onde estava a "lacuna")
  * ============================================================ */
-const EventoCard = ({ evento, inscricao, hasCheckin, onSubscribe, onCheckin, onCancelCheckin, onCancelInscricao, loading }) => {
+const EventoCard = ({ evento, inscricao, hasCheckin, status, onSubscribe, onCheckin, onCancelCheckin, onCancelInscricao, loading }) => {
+  // Verifica se o status é cancelado
+  const isCancelled = status === 'cancelada';
+
   return (
     <motion.div 
       layout
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      className="group flex items-center gap-4 p-4 bg-white border border-slate-100 rounded-xl shadow-sm hover:shadow-md transition-all relative overflow-hidden"
+      className={`group flex items-center gap-4 p-4 bg-white border rounded-xl shadow-sm transition-all relative overflow-hidden ${isCancelled ? 'border-red-200 bg-red-50 opacity-75' : 'border-slate-100 hover:shadow-md'}`}
     >
-      <div className={`absolute left-0 top-0 bottom-0 w-1 ${hasCheckin ? 'bg-green-500' : (inscricao ? 'bg-blue-500' : 'bg-slate-300')}`} />
+      {/* Barra lateral colorida */}
+      <div className={`absolute left-0 top-0 bottom-0 w-1 ${isCancelled ? 'bg-red-400' : (hasCheckin ? 'bg-green-500' : (inscricao ? 'bg-blue-500' : 'bg-slate-300'))}`} />
 
       <div className="h-12 w-12 rounded-xl bg-slate-900 flex items-center justify-center p-1 border border-slate-100 overflow-hidden relative">
          <Calendar className="absolute text-slate-600 opacity-50" size={20} />
-         <img 
-           src={LogoNexStage} 
-           alt="Logo" 
-           className="w-full h-full object-contain opacity-90 relative z-10" 
-           onError={(e) => e.target.style.opacity = 0} 
-         />
+         <img src={LogoNexStage} alt="Logo" className="w-full h-full object-contain opacity-90 relative z-10" onError={(e) => e.target.style.opacity = 0} />
       </div>
 
       <div className="flex-1 min-w-0">
         <h4 className="font-semibold text-slate-900 truncate">{evento.nome}</h4>
         <div className="flex items-center gap-3 mt-1 text-xs text-slate-500">
           <span className="flex items-center gap-1"><Calendar size={12} /> {evento.data_evento ? new Date(evento.data_evento).toLocaleDateString() : 'Data n/a'}</span>
-          <span className="truncate opacity-70 max-w-[150px]">• {evento.descricao}</span>
+          {/* Tag visual de cancelado */}
+          {isCancelled && <span className="text-red-600 font-bold flex items-center gap-1 bg-red-100 px-2 py-0.5 rounded-full text-[10px] uppercase tracking-wide">Inscrição Cancelada</span>}
         </div>
       </div>
 
       <div className="flex-shrink-0 flex flex-col items-end gap-1">
-        {!inscricao && (
-          <Button size="sm" variant="outline" onClick={onSubscribe} disabled={loading} className="h-9 px-4 border-blue-200 text-blue-700 hover:bg-blue-50">
-            <UserPlus size={16} className="mr-2" /> Inscrever
+        {/* Botão Inscrever aparece se não tiver inscrição OU se estiver cancelada (para reativar) */}
+        {(!inscricao || isCancelled) && (
+          <Button 
+            size="sm" 
+            variant="outline" 
+            onClick={() => inscricao ? onSubscribe(inscricao.id_local) : onSubscribe()} 
+            disabled={loading} 
+            className="h-9 px-4 border-blue-200 text-blue-700 hover:bg-blue-50"
+          >
+            <UserPlus size={16} className="mr-2" /> {isCancelled ? "Reativar" : "Inscrever"}
           </Button>
         )}
 
-        {inscricao && !hasCheckin && (
+        {/* Ações de Inscrito (Só aparecem se NÃO estiver cancelado e NÃO tiver checkin) */}
+        {inscricao && !isCancelled && !hasCheckin && (
           <div className="flex items-center gap-1">
              <Button size="icon" variant="ghost" onClick={onCancelInscricao} disabled={loading} title="Cancelar Inscrição" className="h-9 w-9 text-slate-400 hover:text-red-500">
                <Trash2 size={16} />
@@ -162,6 +174,7 @@ const EventoCard = ({ evento, inscricao, hasCheckin, onSubscribe, onCheckin, onC
           </div>
         )}
 
+        {/* Estado de Check-in Realizado */}
         {hasCheckin && (
           <div className="flex items-center gap-2">
              <Button size="icon" variant="ghost" onClick={onCancelCheckin} disabled={loading} title="Desfazer Check-in" className="h-8 w-8 text-slate-400 hover:text-amber-600">
@@ -233,15 +246,74 @@ function App() {
 
   const handleSyncFull = async () => {
     setLoading(true);
-    setMessage("Sincronizando...");
+    setMessage("Processando sincronização...");
+
     try {
       const up = await window.api.online.sincronizarUpload();
       const down = await window.api.online.sincronizarDownload();
+
       if(up.success && down.success) {
-        setMessage(`Sucesso! Subiram: ${up.usersSynced} users, ${up.checksSynced} presenças.`);
+        // Atualiza a tela
         await updateLocalData();
-      } else { setMessage("Erro na sincronização."); }
-    } catch (err) { setMessage("Erro crítico de rede."); } finally { setLoading(false); }
+
+        // 3. Cria Mensagem Personalizada (JSX)
+        setMessage(
+          <div className="flex flex-col gap-2 text-sm">
+            <div className="flex items-center gap-2 font-bold text-green-700">
+              <CheckCircle2 size={18} />
+              <span>Sincronização Concluída com Sucesso!</span>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4 mt-1">
+              {/* Coluna Upload */}
+              <div className="bg-white p-2 rounded border border-slate-100">
+                <p className="text-xs font-bold text-slate-400 uppercase mb-1">Enviado para Nuvem</p>
+                <ul className="space-y-0.5 text-slate-600">
+                  <li>• <b>{up.checkins}</b> Presenças/Check-ins</li>
+                  <li>• <b>{up.users}</b> Novos Usuários</li>
+                  <li>• <b>{up.subs}</b> Novas Inscrições</li>
+                  {up.deletes > 0 && <li className="text-red-500">• <b>{up.deletes}</b> Cancelamentos</li>}
+                </ul>
+              </div>
+
+              {/* Coluna Download */}
+              <div className="bg-white p-2 rounded border border-slate-100">
+                <p className="text-xs font-bold text-slate-400 uppercase mb-1">Recebido do Servidor</p>
+                <ul className="space-y-0.5 text-slate-600">
+                  <li>• <b>{down.events}</b> Eventos Atualizados</li>
+                  <li>• <b>{down.subs}</b> Inscrições Baixadas</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        );
+      } else { 
+        // Tratamento de Erro Bonito
+        const erroMsg = up.message || down.message || "Erro desconhecido ao comunicar com servidor.";
+        console.error("[RENDERER] Sync Falhou:", erroMsg);
+        
+        setMessage(
+          <div className="flex items-start gap-2 text-red-700">
+             <AlertCircle size={18} className="mt-0.5" />
+             <div className="flex flex-col">
+               <span className="font-bold">Falha na Sincronização</span>
+               <span className="text-sm opacity-90">{erroMsg}</span>
+               <span className="text-xs mt-1 opacity-70">Verifique sua conexão ou contate o suporte.</span>
+             </div>
+          </div>
+        ); 
+      }
+
+    } catch (err) { 
+      setMessage(
+        <span className="flex items-center gap-2 text-red-600 font-bold">
+          <WifiOff size={18} /> Erro Crítico de Rede: {err.message}
+        </span>
+      );
+    } finally { 
+      setLoading(false);
+      setTimeout(() => setMessage(""), 30000);
+    }
   };
 
   const handleBackToOnline = async () => {
@@ -272,26 +344,25 @@ function App() {
   const handleSearchParticipante = async () => {
     if (!checkinForm.email) return;
     setCheckinResult(null); setLoading(true);
-
     const emailBusca = checkinForm.email.trim().toLowerCase();
     
+    // Busca segura (case insensitive)
     const userFound = localData.usuarios?.find(u => u.email && u.email.trim().toLowerCase() === emailBusca);
     const inscricaoFound = localData.inscricoes?.find(i => i.email_usuario && i.email_usuario.trim().toLowerCase() === emailBusca && i.evento_id_server === selectedEventId);
 
     setLoading(false);
 
     if (inscricaoFound) {
-       // Usa o NOVO modal em vez de confirm()
        setModalConfig({
          title: "Confirmar Check-in",
-         message: `Participante ${inscricaoFound.nome_usuario} encontrado e já inscrito. Deseja realizar o check-in?`,
+         message: `Participante ${inscricaoFound.nome_usuario} já inscrito. Realizar check-in?`,
          type: "info",
          action: async () => await executeCheckinRapido(inscricaoFound.nome_usuario, checkinForm.email)
        });
     } else if (userFound) {
        setModalConfig({
          title: "Inscrever Participante",
-         message: `Usuário ${userFound.nome} encontrado na base. Deseja realizar a inscrição e check-in agora?`,
+         message: `Usuário ${userFound.nome} encontrado. Inscrever e fazer check-in?`,
          type: "info",
          action: async () => await executeCheckinRapido(userFound.nome, checkinForm.email)
        });
@@ -312,23 +383,13 @@ function App() {
     if (!selectedEventId) return;
     setLoading(true);
     try {
-      const res = await window.api.realizarCheckinRapido({
-        nome, email, eventoIdServer: selectedEventId
-      });
+      const res = await window.api.realizarCheckinRapido({ nome, email, eventoIdServer: selectedEventId });
       if (res.success) {
         setCheckinStep("success");
-        // AQUI A CORREÇÃO DA SENHA
-        setCheckinResult({ 
-          nome, 
-          email, 
-          senhaTemp: res.senhaTemp // Garante que o renderer salve a senha que veio do IPC
-        });
+        setCheckinResult({ nome, email, senhaTemp: res.senhaTemp });
         await updateLocalData();
-      } else {
-        setMessage("Erro: " + res.message);
-      }
-    } catch (e) { setMessage("Erro crítico."); }
-    finally { setLoading(false); }
+      } else { setMessage("Erro: " + res.message); }
+    } catch (e) { setMessage("Erro crítico."); } finally { setLoading(false); }
   };
 
   const resetCheckin = () => {
@@ -416,18 +477,47 @@ function App() {
             <CardContent className="pt-6 space-y-6">
               <div className="grid md:grid-cols-2 gap-4">
                  <Button onClick={handleSyncFull} disabled={loading} size="lg" className="h-20 text-lg bg-white border-2 border-slate-100 hover:border-blue-500 hover:bg-blue-50 text-slate-700 hover:text-blue-700 shadow-sm transition-all flex flex-col gap-1 items-center justify-center">
-                    <Upload className="h-6 w-6 mb-1" />
+                    <Upload className="h-6 w-6 mt-2 mb-2" />
                     <span className="font-bold">Sincronizar</span>
                     <span className="text-xs font-normal text-slate-400">Upload & Download</span>
                  </Button>
 
                  <Button onClick={handleGoOffline} disabled={loading} size="lg" className="h-20 text-lg bg-white border-2 border-slate-100 hover:border-amber-500 hover:bg-amber-50 text-slate-700 hover:text-amber-700 shadow-sm transition-all flex flex-col gap-1 items-center justify-center">
-                    <WifiOff className="h-6 w-6 mb-1" />
-                    <span className="font-bold">Modo Offline</span>
-                    <span className="text-xs font-normal text-slate-400">Para check-in sem internet</span>
+                    <WifiOff className="h-6 w-6 mt-2 mb-2" />
+                    <span className="font-bold">Attendance</span>
+                    <span className="text-xs font-normal text-slate-400">Modo Offline | Faça a sincronização</span>
                  </Button>
               </div>
-              {message && <Alert className="bg-slate-100 border-slate-200"><AlertDescription>{message}</AlertDescription></Alert>}
+              <AnimatePresence>
+                {message && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0 }}
+                    className="mt-6"
+                  >
+                    <Alert className={`border shadow-sm ${
+                      // Detecta se é erro (gambiarra visual simples baseada no conteúdo React) ou sucesso
+                      // Se for objeto React, assumimos neutro/sucesso, o estilo interno define as cores.
+                      // Mas podemos deixar o container neutro (slate-50)
+                      "bg-slate-50 border-slate-200"
+                    }`}>
+                      <AlertDescription className="w-full">
+                        {/* Renderiza o JSX que criamos na função acima */}
+                        {message}
+                      </AlertDescription>
+                      
+                      {/* Botãozinho X para fechar msg manual */}
+                      <button 
+                        onClick={() => setMessage("")}
+                        className="absolute top-2 right-2 text-slate-400 hover:text-slate-600"
+                      >
+                        <X size={14} />
+                      </button>
+                    </Alert>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </CardContent>
           </Card>
         </main>
@@ -450,7 +540,7 @@ function App() {
       />
       <main className="flex-1 p-4 md:p-6 max-w-6xl mx-auto w-full grid lg:grid-cols-[350px_1fr] gap-6 items-start">
         <div className="space-y-6 sticky top-24">
-          <Button onClick={handleBackToOnline} variant="outline" className="w-full border-blue-200 text-blue-700 bg-blue-50 hover:bg-blue-100 shadow-sm"><Wifi size={16} className="mr-2"/> {loading ? "..." : "Voltar Online"}</Button>
+          <Button onClick={handleBackToOnline} variant="outline" className="w-full border-blue-200 text-blue-700 bg-blue-50 hover:bg-blue-100 shadow-sm"><Wifi size={16} className="mr-2"/> {loading ? "..." : "Voltar online"}</Button>
 
           <Card className="shadow-sm">
             <CardHeader className="pb-3 pt-4 px-4"><CardTitle className="text-sm font-medium uppercase tracking-wider text-slate-500">Evento Ativo</CardTitle></CardHeader>
@@ -609,11 +699,18 @@ function App() {
            {/* LISTA DE CARDS (AQUI ESTÁ A CORREÇÃO PRINCIPAL) */}
            <div className="grid gap-3">
              {selectedEventId && localData.inscricoes.filter(i => i.evento_id_server === selectedEventId).map(insc => {
-                 const hasCheckin = localData.presencas.some(p => p.inscricao_id_local === insc.id_local);
+                 const hasCheckin = localData.presencas.some(p => 
+                  p.inscricao_id_local === insc.id_local && p.sync_status !== 'pending_delete'
+                 );
                  return (
                    <EventoCard 
                      key={insc.id_local}
-                     evento={{ nome: insc.nome_usuario || insc.email_usuario, data_evento: localData.eventos.find(e => e.id_server === selectedEventId)?.data_evento, descricao: insc.email_usuario }}
+                     status={insc.status}
+                     evento={{ 
+                      nome: insc.nome_usuario || insc.email_usuario, 
+                      data_evento: localData.eventos.find(e => e.id_server === selectedEventId)?.data_evento, 
+                      descricao: insc.email_usuario 
+                     }}
                      inscricao={true}
                      hasCheckin={hasCheckin}
                      
@@ -650,6 +747,19 @@ function App() {
                              }
                          });
                      }}
+
+                     onSubscribe={(idLocalReativar) => {
+                        setLoading(true);
+                        if (idLocalReativar) {
+                            // Reativar existente
+                            window.api.offline.inscreverLocal({ idLocal: idLocalReativar })
+                                .then(() => updateLocalData())
+                                .finally(() => setLoading(false));
+                        } else {
+                            // Inscrição Nova (Via busca lateral, já implementado lá)
+                            setLoading(false);
+                        }
+                      }}
                      
                      loading={loading}
                    />

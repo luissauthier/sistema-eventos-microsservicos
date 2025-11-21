@@ -1,109 +1,161 @@
-import React, { useState } from 'react';
+// portal-web/src/components/ValidateCertificatePage.js
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import { ShieldCheck, ShieldAlert, Search, QrCode, CheckCircle} from 'lucide-react'; // Ícones novos
+import api from '../api';
 import { buttonHoverTap } from '../App';
-import api from '../api'; // Usamos o api, pois não precisa de token
 
-function ValidateCertificatePage({ setPagina }) {
+function ValidateCertificatePage() {
   const [codigo, setCodigo] = useState('');
-  const [error, setError] = useState('');
-  const [validatedData, setValidatedData] = useState(null);
+  const [resultado, setResultado] = useState(null); // null, 'valid', 'invalid'
+  const [dadosCertificado, setDadosCertificado] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  const handleValidate = async (e) => {
-    e.preventDefault();
-    setError('');
-    setValidatedData(null);
-    setLoading(true);
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const codigoUrl = params.get('codigo');
 
-    if (!codigo) {
-      setError('Por favor, insira um código de validação.');
-      setLoading(false);
-      return;
+    if (codigoUrl) {
+      setCodigo(codigoUrl);
+      validarCertificado(codigoUrl);
     }
+  }, []);
+
+  const validarCertificado = async (codeToValidate) => {
+    if (!codeToValidate) return;
+
+    setLoading(true);
+    setResultado(null);
 
     try {
-      const response = await api.get(`/certificados/validar/${codigo}`);
+      const response = await api.get(`/certificados/validar/${codeToValidate}`);
       
-      // --- CORREÇÃO CRÍTICA DE LÓGICA DE NEGÓCIO ---
       if (response.data.valido) {
-          // Se for válido, armazena o objeto completo para exibição
-          setValidatedData(response.data); 
+        setResultado('valid');
+        setDadosCertificado(response.data);
       } else {
-          // Se a API retornou 200, mas o certificado não existe/é inválido
-          setError('Certificado não encontrado ou inválido. Verifique o código.');
-          setValidatedData(null);
+        setResultado('invalid');
       }
-
-    } catch (err) {
-      // Captura erros de rede (404, 500, etc.)
-      setError('Falha na comunicação com o serviço de validação. Tente novamente.');
-      setValidatedData(null);
-      console.error(err);
+    } catch (error) {
+      console.error(error);
+      setResultado('invalid');
     } finally {
       setLoading(false);
     }
   };
 
-  const isCertificadoValido = validatedData && validatedData.valido;
-  
+  const handleFormSubmit = (e) => {
+    e.preventDefault();
+    validarCertificado(codigo);
+  };
+
   return (
-    <div className="form-container" style={{ maxWidth: '600px' }}>
-      <h2>Validar Certificado</h2>
-      <p>Insira o código de autenticação presente no certificado para verificar a sua validade.</p>
-      
-      <form onSubmit={handleValidate}>
-        <div className="form-group">
-          <label>Código de Autenticação:</label>
-          <input 
-            type="text" 
-            placeholder="ex: 123e4567-e89b-12d3-a456-426614174000" 
-            required 
-            value={codigo}
-            onChange={(e) => setCodigo(e.target.value)}
-          />
+    <div className="login-container" style={{ paddingTop: '40px', alignItems: 'flex-start' }}>
+      <motion.div 
+        className="login-card" // Reutiliza o estilo do card centralizado
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+        style={{ maxWidth: '500px' }}
+      >
+        
+        {/* Cabeçalho com Ícone de Escudo */}
+        <div style={{ textAlign: 'center', marginBottom: '32px' }}>
+          <div style={{ 
+             width: '64px', height: '64px', 
+             backgroundColor: 'var(--bg-element)', 
+             borderRadius: '50%', 
+             display: 'flex', alignItems: 'center', justifyContent: 'center',
+             margin: '0 auto 16px auto'
+          }}>
+             <ShieldCheck size={32} color="var(--primary)" />
+          </div>
+          <h2 style={{ marginBottom: '8px', color: 'var(--primary)' }}>Validar certificado</h2>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
+            Garanta a autenticidade do documento inserindo o código único abaixo.
+          </p>
         </div>
-        
-        <motion.button 
-          type="submit" 
-          className="btn-primary"
-          {...buttonHoverTap}
-          disabled={loading}
-        >
-          {loading ? "A verificar..." : "Verificar"}
-        </motion.button>
-        
-        <p className="form-switch">
-          Voltar para o 
-          <button onClick={() => setPagina('login')} className="btn-link">
-            Login
-          </button>
-        </p>
-      </form>
 
-      {/* --- Exibição do Resultado --- */}
-      {error && <p className="form-error">{error}</p>}
-      
-      {isCertificadoValido && (
-        <motion.div 
-          className="card-inscricao" 
-          style={{ marginTop: '2rem', borderColor: 'var(--green)' }}
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-        >
-          <h3 style={{ color: 'var(--green)' }}>Certificado Válido</h3>
-          
-          {/* --- CORREÇÃO DOS NOMES DE CAMPO DO BACKEND --- */}
-          <p><strong>Participante:</strong> {validatedData.usuario}</p> 
-          <p><strong>Evento:</strong> {validatedData.evento}</p>
-          {/* ----------------------------------------------- */}
+        <form onSubmit={handleFormSubmit}>
+          <div className="form-group input-with-icon">
+            <label>Insira o código de autenticidade:</label>
+            <div style={{ position: 'relative' }}>
+                <QrCode className="input-left-icon" size={18} />
+                <input 
+                  type="text" 
+                  placeholder="Ex: A1B2-C3D4-E5F6" 
+                  value={codigo}
+                  onChange={(e) => setCodigo(e.target.value.trim())}
+                  maxLength={30}
+                  autoFocus
+                  style={{ fontFamily: 'monospace', letterSpacing: '1px', fontWeight: '600' }} // Destaque para o código
+                />
+            </div>
+          </div>
 
-          <p><strong>Emitido em:</strong> {new Date(validatedData.data_emissao).toLocaleDateString()}</p>
-          {/* O código de validação é o que o usuário inseriu */}
-          <p><strong>Código:</strong> {codigo}</p> 
-          <p><strong>Template:</strong> {validatedData.template_certificado}</p> 
+          <motion.button 
+            type="submit" 
+            className="btn-login"
+            disabled={loading || !codigo}
+            {...buttonHoverTap}
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+          >
+            {loading ? 'Verificando...' : <><Search size={18} /> Verificar autenticidade!</>}
+          </motion.button>
+        </form>
 
-        </motion.div>
-      )}
+        {/* RESULTADO: VÁLIDO */}
+        {resultado === 'valid' && (
+          <motion.div 
+            className="result-box success"
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            style={{ marginTop: '32px', textAlign: 'left' }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+                <CheckCircle size={32} className="text-green-600" />
+                <div>
+                    <h3 style={{ margin: 0, color: 'var(--success)', fontSize: '1.1rem' }}>Certificado autêntico!</h3>
+                    <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Verificado em nossa base de dados</span>
+                </div>
+            </div>
+            
+            <div className="cert-details" style={{ fontSize: '0.9rem', lineHeight: '1.6', color: 'var(--text-primary)' }}>
+              <p style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '8px', marginBottom: '8px' }}>
+                 <span style={{ color: 'var(--text-secondary)' }}>Participante:</span> <br/>
+                 <strong>{dadosCertificado.participante || dadosCertificado.usuario}</strong>
+              </p>
+              <p style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '8px', marginBottom: '8px' }}>
+                 <span style={{ color: 'var(--text-secondary)' }}>Evento:</span> <br/>
+                 <strong>{dadosCertificado.evento}</strong>
+              </p>
+              <p>
+                 <span style={{ color: 'var(--text-secondary)' }}>Data de Emissão:</span> <br/>
+                 <strong>{new Date(dadosCertificado.data_emissao).toLocaleDateString()}</strong>
+              </p>
+            </div>
+          </motion.div>
+        )}
+
+        {/* RESULTADO: INVÁLIDO */}
+        {resultado === 'invalid' && (
+          <motion.div 
+            className="result-box error"
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            style={{ marginTop: '32px', display: 'flex', gap: '12px', alignItems: 'start', textAlign: 'left' }}
+          >
+            <ShieldAlert size={24} className="text-red-600" style={{ flexShrink: 0, marginTop: '2px' }} />
+            <div>
+                <h3 style={{ margin: '0 0 4px 0', color: 'var(--danger)', fontSize: '1rem' }}>Certificado Não Encontrado</h3>
+                <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+                    O código informado não consta em nossos registros. Verifique se foi digitado corretamente.
+                </p>
+            </div>
+          </motion.div>
+        )}
+
+      </motion.div>
     </div>
   );
 }

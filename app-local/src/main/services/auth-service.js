@@ -1,93 +1,85 @@
-/**
- * AuthService
- * Responsável por:
- * ✔ Autenticar usuário via API
- * ✔ Validar se é admin
- * ✔ Armazenar token em memória (Singleton)
- */
-
+const Store = require("electron-store");
 const api = require("./api");
 const { createLogger } = require("../logger");
 
 const logger = createLogger("auth-service");
-
-// Estado em memória (Singleton dentro do módulo)
-let currentToken = null;
-let currentUser = null;
+const store = new Store();
 
 const AuthService = {
+  
   /**
-   * Realiza login via API e valida se é admin.
+   * Realiza login, busca perfil e salva sessão.
    */
   async login(username, password) {
     try {
       logger.info("login_attempt", { username });
 
-      // 1. Chamada na API
+      // 1. Obter Token (POST /auth)
       const loginResp = await api.login(username, password);
       
       if (!loginResp || !loginResp.access_token) {
-        throw new Error("Resposta da API inválida (sem token).");
+        throw new Error("Credenciais inválidas ou erro na API.");
       }
 
-      const tempToken = loginResp.access_token;
+      const accessToken = loginResp.access_token;
 
-      // 2. Buscar perfil do usuário (para confirmar que é admin)
-      // Nota: Algumas APIs já retornam o user no login. Se não, buscamos agora.
-      let userProfile = loginResp.user;
-      
+      // 2. Buscar Perfil Real do Usuário (GET /usuarios/me)
+      // Fundamental para validar 'is_admin' com segurança
+      const userProfile = await api.getCurrentUser(accessToken);
+
       if (!userProfile) {
-        // Se o login não retornou o objeto user, buscamos via endpoint /me ou similar
-        try {
-           // Você precisará implementar getCurrentUser ou getMe no api.js se não existir
-           // Por hora, vamos assumir que o login retorna o user ou usamos o loginResp
-           userProfile = loginResp.user || { username, is_admin: true }; // Fallback temporário
-        } catch (e) {
-           logger.warn("profile_fetch_fail", { error: e.message });
-        }
+        throw new Error("Falha ao recuperar perfil do usuário.");
       }
 
-      // 3. Validação de Admin (Regra de Negócio)
-      // Ajuste a propriedade 'is_admin' conforme o retorno real do seu Python
-      // Se o Python retorna 'role': 'admin', ajuste aqui.
-      if (userProfile && userProfile.is_admin === false) { 
-        logger.warn("login_denied_not_admin", { username });
-        throw new Error("Acesso negado: Apenas administradores podem acessar o app local.");
+      // 3. Validação de Regra de Negócio (Apenas Admin acessa o App Local?)
+      // Ajuste conforme a regra. Se atendentes também usam, remova ou ajuste o check.
+      if (userProfile.is_admin !== true) {
+        logger.warn("login_denied_not_admin", { username, role: userProfile.is_admin });
+        throw new Error("Acesso negado: Apenas administradores podem gerenciar o terminal.");
       }
 
-      // 4. Sucesso: Salva no estado
-      currentToken = tempToken;
-      currentUser = userProfile;
+      // 4. Persistência (Salva no Disco)
+      store.set("auth_token", accessToken);
+      store.set("auth_user", userProfile);
 
-      logger.info("login_success", { username });
+      logger.info("login_success", { username, id: userProfile.id });
 
       return {
         success: true,
-        user: currentUser,
-        token: currentToken
+        user: userProfile,
+        token: accessToken
       };
 
     } catch (err) {
       logger.error("login_error", { error: err.message });
-      currentToken = null;
-      currentUser = null;
-      
-      // Repassa o erro para ser tratado no IPC
+      this.logout(); // Limpa qualquer lixo em caso de erro
       throw err;
     }
   },
 
+  /**
+   * Remove as credenciais do disco.
+   */
   logout() {
-    logger.info("logout");
-    currentToken = null;
-    currentUser = null;
+    logger.info("logout_performed");
+    store.delete("auth_token");
+    store.delete("auth_user");
     return { success: true };
   },
 
-  // Getters para outros serviços (Sync, etc)
-  getToken: () => currentToken,
-  getUser: () => currentUser,
-  isAuthenticated: () => !!currentToken
+  // --- Getters (Usados pelo Sync e outros serviços) ---
+
+  getToken() {
+    return store.get("auth_token");
+  },
+
+  getUser() {
+    return store.get("auth_user");
+  },
+
+  isAuthenticated() {
+    return !!store.get("auth_token");
+  }
 };
 
 module.exports = AuthService;
