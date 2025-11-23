@@ -40,6 +40,8 @@ const api = {
   online: {
     login: (username, password) => invoke('login', username, password),
     logout: () => ipcRenderer.send('logout'),
+    setModeOffline: () => invoke('set-mode-offline'),
+    setModeOnline: () => invoke('set-mode-online'),
     
     // Aqui estava o erro: garantimos que os nomes batem com o renderer
     sincronizarDownload: () => invoke('sincronizar-download'),

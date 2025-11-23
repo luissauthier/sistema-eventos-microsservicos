@@ -319,6 +319,7 @@ function App() {
   const handleBackToOnline = async () => {
     setLoading(true);
     try {
+      await window.api.online.setModeOnline();
       const res = await window.api.online.sincronizarDownload();
       if (res.success) {
         setAppState(AppState.ONLINE);
@@ -332,6 +333,7 @@ function App() {
   // --- Handlers Offline ---
   const handleGoOffline = async () => {
     setLoading(true);
+    await window.api.online.setModeOffline();
     await updateLocalData();
     setAppState(AppState.OFFLINE);
     setLoading(false);

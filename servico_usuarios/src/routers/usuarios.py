@@ -1,10 +1,12 @@
 # servico_usuarios/src/routers/usuarios.py
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 from typing import List
 
 import models   
-import schemas  
+import schemas
+from schemas import HeartbeatSchema
 import auth as auth_service 
 from database import get_db 
 from servico_comum.exceptions import ServiceError
@@ -138,3 +140,17 @@ def get_user_by_id(
     if not user:
         raise ServiceError("Usuário não encontrado", 404)
     return user
+
+@router.post("/usuarios/heartbeat", status_code=204)
+def registrar_batimento(
+    payload: HeartbeatSchema, # <--- Agora aceita payload JSON
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user_from_db)
+):
+    """
+    Recebe: { "status": "online" } ou { "status": "working_offline" }
+    """
+    current_user.last_heartbeat = datetime.now(timezone.utc)
+    current_user.connection_status = payload.status # Salva o status informado
+    db.commit()
+    return

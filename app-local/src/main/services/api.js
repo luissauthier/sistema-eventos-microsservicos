@@ -182,5 +182,17 @@ module.exports = {
       } catch (e) {
           return null;
       }
+  },
+
+  async sendHeartbeat(token, status = "online") {
+    try {
+      await api.post("/usuarios/heartbeat", { status }, {
+        headers: { Authorization: `Bearer ${token}` },
+        timeout: 5000
+      });
+      return true;
+    } catch (e) {
+      return false;
+    }
   }
 };

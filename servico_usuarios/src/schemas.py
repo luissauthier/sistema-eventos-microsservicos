@@ -35,6 +35,7 @@ class UserBase(BaseModel):
     must_change_password: bool = False
     is_active: bool = True
     is_verified: bool = False
+    connection_status: Optional[str] = "disconnected"
     # --------------------
 
     # --- Sanitização padrão ---
@@ -131,3 +132,7 @@ class UserUpdate(BaseModel):
 
     class Config:
         extra = "forbid"
+
+
+class HeartbeatSchema(BaseModel):
+    status: str = "online"

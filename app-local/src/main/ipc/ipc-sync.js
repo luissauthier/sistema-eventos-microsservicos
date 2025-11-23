@@ -2,6 +2,7 @@
 const { ipcMain } = require("electron");
 const { uploadPendingData } = require("../services/sync-upload");
 const { downloadServerData } = require("../services/sync-download");
+const { startHeartbeat, setModeOffline } = require("../services/heartbeat-service");
 const { createLogger } = require("../logger");
 // const { getToken } = require("../security"); // Se usar security.js
 // OU se estiver salvando token no auth-service:
@@ -10,6 +11,16 @@ const AuthService = require("../services/auth-service");
 const logger = createLogger("ipc-sync");
 
 module.exports = function registerSyncHandlers(db) {
+
+  ipcMain.handle("set-mode-offline", async () => {
+      await setModeOffline(); // Avisa o servidor
+      return { success: true };
+  });
+
+  ipcMain.handle("set-mode-online", async () => {
+      startHeartbeat(); // Volta a bater o coração
+      return { success: true };
+  });
   
   ipcMain.removeHandler("sincronizar-upload");
   // --- Rota de Upload (Local -> Nuvem) ---
