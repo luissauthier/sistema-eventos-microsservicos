@@ -10,7 +10,7 @@ JWT_SECRET = os.getenv("JWT_SECRET", "CHANGE_ME")
 JWT_ALGORITHM = "HS256"
 JWT_ISSUER = "sistema-eventos"
 
-def create_access_token(sub: str, roles=None, expires_minutes=60):
+def create_access_token(sub: str, roles=None, expires_minutes=60, extra_claims: dict = None):
     now = datetime.utcnow()
     payload = {
         "sub": sub,
@@ -19,6 +19,8 @@ def create_access_token(sub: str, roles=None, expires_minutes=60):
         "exp": now + timedelta(minutes=expires_minutes),
         "iss": JWT_ISSUER,
     }
+    if extra_claims:
+        payload.update(extra_claims)
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
 def decode_token(token: str):

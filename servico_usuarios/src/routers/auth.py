@@ -32,7 +32,12 @@ def login(
     roles = ["admin"] if user.is_admin else ["user"]
     token = auth_service.create_access_token(
         sub=user.username,
-        roles=roles
+        roles=roles,
+        extra_claims={
+            "user_id": user.id,
+            "email": user.email,
+            "full_name": user.full_name
+        }
     )
 
     logger.info("login_success", extra={"username": user.username, "roles": roles})

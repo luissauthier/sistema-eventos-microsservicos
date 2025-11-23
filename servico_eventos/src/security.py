@@ -10,8 +10,8 @@ import httpx
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from pydantic import BaseModel, EmailStr
-from typing import Optional
-
+from typing import Optional, List
+from servico_comum.auth import decode_token
 from servico_comum.logger import configure_logger
 
 
@@ -43,6 +43,7 @@ class User(BaseModel):
     username: str
     email: Optional[EmailStr] = None
     full_name: Optional[str] = None
+    roles: List[str] = []
     is_admin: bool = False
     is_active: bool = True
     is_verified: bool = False
@@ -57,55 +58,41 @@ async def get_current_user(
     token: str = Depends(oauth2_scheme)
 ):
     """
-    Encaminha o token ao servico_usuarios.
-    Caso o usuário seja válido, devolve o User corporativo.
+    Valida o token LOCALMENTE (Stateless).
+    Baixo acoplamento: Não depende do servico_usuarios estar online.
     """
-
-    # Headers seguros
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "X-Request-ID": getattr(request.state, "request_id", None)
-    }
-
     try:
-        async with httpx.AsyncClient(timeout=5) as client:
-            response = await client.get(USER_SERVICE_URL, headers=headers)
+        # 1. Decodifica e Valida Assinatura (usa servico_comum)
+        payload = decode_token(token)
+        
+        # 2. Extrai dados do payload (Claims)
+        user_id = payload.get("user_id")
+        username = payload.get("sub")
+        roles = payload.get("roles", [])
+        
+        if not username or not user_id:
+            raise HTTPException(status_code=401, detail="Token malformado")
 
-        if response.status_code == 401:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Credenciais inválidas",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-
-        # Levanta exceções para 404, 500, etc.
-        response.raise_for_status()
-
-        data = response.json()
-
-        # Converte para schema corporativo
-        user = User(**data)
-
-        if not user.is_active:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Conta inativa"
-            )
-
-        return user
-
-    except httpx.TimeoutException:
-        logger.error("Timeout ao contatar servico_usuarios")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="serviço de autenticação indisponível"
+        # 3. Reconstrói o objeto User
+        user = User(
+            id=user_id,
+            username=username,
+            email=payload.get("email"),       # Vem do token
+            full_name=payload.get("full_name"), # Vem do token
+            roles=roles,
+            is_admin="admin" in roles
         )
 
-    except httpx.RequestError as exc:
-        logger.error("Erro de rede ao chamar servico_usuarios", extra={"error": str(exc)})
+        # Injeta ID da requisição se disponível (para rastreabilidade)
+        request.state.user = user
+        return user
+
+    except Exception as e:
+        logger.warning(f"auth_failure: {str(e)}")
         raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="serviço de autenticação indisponível"
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token inválido ou expirado",
+            headers={"WWW-Authenticate": "Bearer"},
         )
 
 
