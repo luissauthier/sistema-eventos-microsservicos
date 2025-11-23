@@ -1,9 +1,5 @@
 # servico_usuarios/src/auth.py
 
-"""
-Módulo de autenticação do serviço de usuários.
-"""
-
 import os
 from datetime import datetime, timedelta
 from typing import Optional, List
@@ -39,22 +35,23 @@ def get_password_hash(password: str) -> str:
 #  CONFIGURAÇÃO DO JWT (CORPORATIVO)
 # ============================================================
 
-SECRET_KEY = os.getenv("JWT_SECRET", "CHANGE_ME_IMMEDIATELY")
-ALGORITHM = "HS256"  # Algoritmo fixado evita ataques
+SECRET_KEY = os.getenv("JWT_SECRET", "nexstage_online_event_management_system")
+ALGORITHM = "HS256"
 ISSUER = "sistema-eventos"
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth")
-
-
-def create_access_token(sub: str, roles: Optional[List[str]] = None, expires_minutes: int = None):
+def create_access_token(
+    sub: str, 
+    roles: Optional[List[str]] = None, 
+    expires_minutes: int = None,
+    extra_claims: dict = None 
+):
     """
     Cria token JWT profissional com:
     - sub: identificação do usuário
     - roles: lista de permissões
-    - iss: emissor
-    - iat: data de emissão
-    - exp: data de expiração
+    - extra_claims: dados adicionais (email, id, etc)
     """
     now = datetime.utcnow()
     exp = now + timedelta(minutes=expires_minutes or ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -67,6 +64,9 @@ def create_access_token(sub: str, roles: Optional[List[str]] = None, expires_min
         "exp": exp.timestamp(),
     }
 
+    if extra_claims:
+        payload.update(extra_claims)
+
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
 
@@ -75,13 +75,6 @@ def create_access_token(sub: str, roles: Optional[List[str]] = None, expires_min
 # ============================================================
 
 def decode_and_validate_token(token: str):
-    """
-    Aceita tokens dos emissores:
-    - servico-eventos     (novo)
-    - sistema-eventos     (app-local legado)
-    - servico-usuarios    (compatibilidade)
-    """
-
     valid_issuers = [
         "servico-eventos",
         "sistema-eventos",
@@ -100,7 +93,6 @@ def decode_and_validate_token(token: str):
         except JWTError:
             continue
 
-    # Se nenhum issuer bater:
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Token inválido ou emissor desconhecido.",
@@ -113,15 +105,6 @@ async def get_current_user(
     token: str = Depends(oauth2_scheme),
     db: Session = Depends(get_db),
 ):
-    """
-    1. Decodifica e valida o JWT
-    2. Busca o usuário no banco
-    3. Preenche request.state.user para auditoria
-    """
-
-    # ---------------------------------------------------------
-    # 1. Validar token (com captura de erros)
-    # ---------------------------------------------------------
     payload = decode_and_validate_token(token)
 
     username = payload.get("sub")
@@ -131,9 +114,6 @@ async def get_current_user(
             detail="Token inválido: 'sub' ausente."
         )
 
-    # ---------------------------------------------------------
-    # 2. Buscar usuário real no banco
-    # ---------------------------------------------------------
     user = (
         db.query(models.User)
         .filter(models.User.username == username)
@@ -146,9 +126,6 @@ async def get_current_user(
             detail="Credenciais inválidas: usuário não encontrado."
         )
 
-    # ---------------------------------------------------------
-    # 3. Registrar auditoria no request.state.user
-    # ---------------------------------------------------------
     try:
         request.state.user = {
             "id": user.id,
@@ -156,7 +133,6 @@ async def get_current_user(
             "roles": payload.get("roles") or [],
         }
     except Exception:
-        # Em caso de request.state estar indisponível em algum contexto
         pass
 
     return user
@@ -167,13 +143,6 @@ async def get_current_user(
 # ============================================================
 
 def require_roles(*allowed_roles):
-    """
-    Dependência que implementa RBAC corporativo.
-    Exemplo:
-        @app.get(...)
-        def admin_route(user = Depends(require_roles("admin"))):
-            ...
-    """
     async def role_checker(
         request: Request,
         current_user: models.User = Depends(get_current_user)
@@ -194,8 +163,4 @@ def require_roles(*allowed_roles):
 def get_current_admin_user(
     user: models.User = Depends(require_roles("admin"))
 ):
-    """
-    Mantido para compatibilidade.
-    Agora internamente usa RBAC corporativo.
-    """
     return user
