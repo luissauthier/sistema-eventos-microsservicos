@@ -55,14 +55,13 @@ function EventosPage({ setPagina, setEventoEditando, user }) {
         duracao_minutos: 60
       });
 
-      const { token } = response.data;
-      const qrContent = `http://localhost:8000/checkin-qr/${token}`; 
-      const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(qrContent)}`;
+      const qrUrl = response.data.url_publica;
+      const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(qrUrl)}`;
 
       setQrModal({
         eventoNome: evento.nome,
         imageUrl: qrImageUrl,
-        token: token
+        token: qrUrl
       });
 
     } catch (error) {

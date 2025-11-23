@@ -1,6 +1,7 @@
 import io
 import uuid
 import hashlib
+import os
 import qrcode
 from datetime import datetime
 from reportlab.pdfgen import canvas
@@ -165,7 +166,10 @@ def _draw_validation_footer(c, w, y, codigo, color, font="Helvetica"):
     
     # 1. URL de Validação Direta
     # Aponta para o front-end passando o código como query param
-    url_validacao = f"http://localhost:3000/validar?codigo={codigo}"
+    base_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+    if base_url.endswith("/"):
+        base_url = base_url[:-1]
+    url_validacao = f"{base_url}/validar?codigo={codigo}"
     
     # 2. Gerar QR Code em Memória
     qr_img = qrcode.make(url_validacao)
@@ -190,4 +194,4 @@ def _draw_validation_footer(c, w, y, codigo, color, font="Helvetica"):
     
     c.drawCentredString(text_center, y + 10, f"Código de Autenticidade: {codigo}")
     c.drawCentredString(text_center, y, "Para validar, escaneie o QR Code ao lado")
-    c.drawCentredString(text_center, y - 10, "ou acesse: http://localhost:3000/validar")
+    c.drawCentredString(text_center, y - 10, f"ou acesse: {base_url}/validar")

@@ -58,7 +58,7 @@ function InscricoesPage() {
     if (inscricao.certificado && inscricao.certificado.codigo_unico) {
       
       // Pega a URL base da API (ex: http://localhost/)
-      const baseUrl = api.defaults.baseURL || 'http://localhost';
+      const baseUrl = api.defaults.baseURL || 'http://177.44.248.76';
       // Garante que não tenha barra duplicada
       const cleanBase = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
       

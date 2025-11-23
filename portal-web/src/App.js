@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import './App.css';
 import logoLight from './nexstage_sem_fundo_escuro.svg';
 import logoDark from './nexstage_sem_fundo_branco.svg';
@@ -13,6 +13,7 @@ import ProfilePage from './components/ProfilePage';
 import ValidateCertificatePage from './components/ValidateCertificatePage';
 import CriarEventoPage from './components/CriarEventoPage';
 import CheckinPage from './components/CheckinPage';
+import CheckinRealizadoPage from './components/CheckinRealizadoPage';
 import ChangePasswordScreen from './components/ChangePasswordScreen';
 
 const pageVariants = {
@@ -48,12 +49,44 @@ function App() {
   const [pagina, setPagina] = useState(authToken ? 'eventos' : 'login'); 
   const [eventoEditando, setEventoEditando] = useState(null);
   const [theme, setTheme] = useState('light');
+  
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const path = window.location.pathname;
+
+    if (params.get('codigo') || path === '/validar') {
+        setPagina('validar');
+        return; // Prioridade máxima, interrompe o resto
+    }
+
+    const tokenUrl = params.get('token');
+    
+    // Se a URL tem ?token=... (Vindo do QR Code)
+    if (tokenUrl) {
+        // Verifica se está logado
+        const savedUser = localStorage.getItem('user');
+        
+
+        if (savedUser) {
+            // Se já está logado, vai direto para a página de confirmação
+            setPagina('checkin-confirmar');
+        } else {
+            // Se NÃO está logado, salva o token para usar depois do login
+            localStorage.setItem('pending_checkin_token', tokenUrl);
+            setPagina('login'); // Força tela de login
+        }
+    }
+  }, []);
 
   // 2. HANDLERS E FUNÇÕES AUXILIARES
   const handleLoginSuccess = (usuarioLogado) => {
       setUser(usuarioLogado);
       setAuthToken(localStorage.getItem('access_token'));
-      setPagina('eventos'); // Redireciona para eventos ao logar
+      if (localStorage.getItem('pending_checkin_token')) {
+          setPagina('checkin-confirmar');
+      } else {
+          setPagina('eventos');
+      }
   };
 
   const handlePasswordChanged = () => {
@@ -67,6 +100,7 @@ function App() {
   const handleLogout = () => {
     localStorage.removeItem('access_token');
     localStorage.removeItem('user');
+    localStorage.removeItem('pending_checkin_token');
     setAuthToken(null);
     setUser(null);
     setPagina('login');
@@ -77,9 +111,7 @@ function App() {
   };
 
   const lastPage = localStorage.getItem('last_public_page');
-  if (!user && !authToken && !['register', 'validar'].includes(pagina)) {
-     // Se a pagina atual no estado não é publica, mostramos o login
-     // Nota: Alterei a lógica para olhar o estado 'pagina' em vez do localStorage direto para evitar loop
+  if (!user && !authToken && !['register', 'validar', 'login'].includes(pagina)) {
      if (pagina !== 'login' && pagina !== 'register' && pagina !== 'validar') {
         return <LoginPage onLogin={handleLoginSuccess} setPagina={setPagina} theme={theme} />;
      }
@@ -148,6 +180,16 @@ function App() {
             setPagina={setPagina} 
             evento={eventoGerenciando} 
           />
+        </motion.div>
+      );
+      if (pagina === 'checkin-confirmar') return (
+           <motion.div key="checkin-confirmar" variants={pageVariants} initial="initial" animate="in" exit="out" transition={pageTransition}>
+             <CheckinRealizadoPage setPagina={setPagina} />
+           </motion.div>
+        );
+      if (pagina === 'validar') return (
+        <motion.div key="validar" variants={pageVariants} initial="initial" animate="in" exit="out" transition={pageTransition}>
+          <ValidateCertificatePage setPagina={setPagina} />
         </motion.div>
       );
     }

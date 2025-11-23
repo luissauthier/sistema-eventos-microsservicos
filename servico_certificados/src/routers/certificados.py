@@ -45,7 +45,7 @@ def emitir_certificado_interno(
     return {
         "codigo_unico": codigo,
         # URL pública que o Nginx vai rotear
-        "url_download": f"http://localhost/certificados/download/{codigo}",
+        "url_download": f"http://177.44.248.76/certificados/download/{codigo}",
         "status": "emitido",
         "data_emissao": datetime.utcnow()
     }

@@ -20,12 +20,6 @@ class InscricaoStatus(str, enum.Enum):
     PENDENTE_SYNC = "pendente_sync"  # usado no modo offline
 
 
-class PresencaOrigem(str, enum.Enum):
-    ONLINE = "online"
-    OFFLINE = "offline"
-    SINCRONIZADO = "sincronizado"
-
-
 # ============================================================
 #  EVENTO
 # ============================================================
@@ -108,21 +102,23 @@ class Presenca(Base):
 
     data_checkin = Column(DateTime(timezone=True), server_default=func.now())
 
-    origem = Column(
-        Enum(PresencaOrigem),
-        default=PresencaOrigem.ONLINE,
-        nullable=False
-    )
+    origem = Column(String, default="online")
 
     evento = relationship("Evento", back_populates="presencas")
     inscricao = relationship("Inscricao", back_populates="presencas")
 
     # Auditoria
+    data_checkin = Column(DateTime(timezone=True), server_default=func.now())
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     def __repr__(self):
         return f"<Presenca usuario={self.usuario_id} evento={self.evento_id} origem={self.origem}>"
 
+class PresencaOrigem(str, enum.Enum):
+    ONLINE = "online"
+    OFFLINE = "offline"
+    SINCRONIZADO = "sincronizado"
+    QR_CODE = "qrcode"
 
 # ============================================================
 #  CERTIFICADO
@@ -156,13 +152,13 @@ def gerar_token_uuid():
 
 class CheckinToken(Base):
     __tablename__ = "checkin_tokens"
-
+    __table_args__ = {'extend_existing': True}
     # Token UUID é a chave primária e o valor que vai no QR Code
     token = Column(UUID(as_uuid=False), primary_key=True, default=gerar_token_uuid)
 
     # Liga ao evento
     evento_id = Column(Integer, ForeignKey("eventos.id"), nullable=False, index=True)
-
+    data_criacao = Column(DateTime(timezone=True), server_default=func.now())
     # Metadados
     data_expiracao = Column(DateTime(timezone=True), nullable=False)
     # Flag que permite desativar o token manualmente (ex: se o QR Code vazou)

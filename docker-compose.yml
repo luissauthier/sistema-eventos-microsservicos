@@ -12,7 +12,7 @@
     ports:
       - "5432:5432" # Para debug local
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U admin -d eventos_db"]
+      test: ["CMD-SHELL", "pg_isready -U nexstage -d eventos_db"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -54,6 +54,8 @@
     container_name: ms-eventos
     restart: unless-stopped
     env_file: ./.env
+    environment:
+      - FRONTEND_URL=http://177.44.248.76
     volumes:
       - ./servico_eventos/src:/app
       - ./servico_comum:/app/servico_comum
@@ -68,6 +70,8 @@
     container_name: ms-certificados
     restart: unless-stopped
     env_file: ./.env
+    environment:
+      - FRONTEND_URL=http://177.44.248.76
     volumes:
       - ./servico_certificados/src:/app
       - ./servico_comum:/app/servico_comum

@@ -1,10 +1,12 @@
 // portal-web/src/api.js
 import axios from 'axios';
 
+const baseURL = process.env.REACT_APP_API_URL;
+
 // 1. Cria uma instância base do axios
 const api = axios.create({
   // A nossa baseURL é a raiz, pois o Nginx trata do resto.
-  baseURL: 'http://localhost/'
+  baseURL: baseURL,
   // Em produção, isto seria a URL do seu site, ex: 'https://seusite.com/'
 });
 

@@ -1,9 +1,9 @@
 # servico_eventos/src/routers/presencas.py
 from fastapi import APIRouter, Depends, BackgroundTasks, status, HTTPException
 from sqlalchemy.orm import Session
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import uuid
-
+import os
 import models, schemas
 from database import get_db
 from security import get_current_admin_user, get_current_user, User
@@ -90,7 +90,8 @@ async def consume_checkin_qr(
 ):
     # Valida Token
     token_obj = db.query(models.CheckinToken).filter_by(token=token_uuid).first()
-    if not token_obj or not token_obj.is_active or token_obj.data_expiracao < datetime.utcnow():
+    now_utc = datetime.now(timezone.utc)
+    if not token_obj or not token_obj.is_active or token_obj.data_expiracao < now_utc:
         raise ServiceError("Token inválido ou expirado", 400)
 
     # Auto-Inscrição (Inscrição Rápida)
@@ -175,12 +176,11 @@ def generate_checkin_token(
     if not evento:
         raise ServiceError("Evento não encontrado", 404)
 
-    # 1. Invalida tokens anteriores deste evento (Opcional, para segurança)
-    # db.query(models.CheckinToken).filter_by(evento_id=body.evento_id).update({"is_active": False})
+    #Invalida tokens anteriores deste evento
+    db.query(models.CheckinToken).filter_by(evento_id=body.evento_id).update({"is_active": False})
     
-    # 2. Gera Token
     token_uuid = str(uuid.uuid4())
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     exp = now + timedelta(minutes=body.duracao_minutos)
 
     token = models.CheckinToken(
@@ -193,18 +193,17 @@ def generate_checkin_token(
     db.commit()
     db.refresh(token)
 
-    # 3. Retorna com a URL Pública montada
-    # A URL aponta para o Frontend, que vai ler o token da URL e chamar a API
-    # Ex: http://localhost:3000/checkin/verify?token=...
-    # No seu caso, o App mobile lê o QR e chama a API direta, ou abre uma pág web.
-    # Vamos retornar a URL que o QRCode vai encodar.
-    
+    base_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+
+    if base_url.endswith("/"):
+        base_url = base_url[:-1]
+
     return {
         "token": token.token,
         "evento_id": token.evento_id,
         "data_expiracao": token.data_expiracao,
         "is_active": token.is_active,
-        "url_publica": f"http://localhost:3000/checkin?token={token.token}" # URL do Frontend para checkin
+        "url_publica": f"{base_url}/checkin?token={token.token}"
     }
 
 @router.delete("/admin/presencas/{id}", tags=["Admin"])
