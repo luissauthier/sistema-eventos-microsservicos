@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { ArrowLeft, ArrowRight, X, Plus, Edit2, QrCode, Calendar, Check } from 'lucide-react';
 import { buttonHoverTap } from '../App';
 import api from '../api';
+import MonitoramentoAtendentes from './MonitoramentoAtendentes';
 
 // Animações
 const containerVariants = {
@@ -311,6 +312,12 @@ function EventosPage({ setPagina, setEventoEditando, user }) {
               );
             })}
           </motion.div>
+        </div>
+      )}
+      {/* === MONITORAMENTO DE ATENDENTES (Admin) === */}
+      {isAdmin && !eventoSelecionado && (
+        <div className="mb-8">
+           <MonitoramentoAtendentes />
         </div>
       )}
     </>

@@ -1,6 +1,6 @@
 # servico_usuarios/src/schemas.py
 
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 from typing import Optional
 from datetime import datetime
 
@@ -36,6 +36,9 @@ class UserBase(BaseModel):
     is_active: bool = True
     is_verified: bool = False
     connection_status: Optional[str] = "disconnected"
+    last_heartbeat: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
     # --------------------
 
     # --- Sanitização padrão ---

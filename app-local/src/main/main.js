@@ -4,6 +4,7 @@ const path = require('path');
 const { connectDB } = require('./db/db');
 const { initIPC } = require('./ipc/index');
 const { createLogger } = require('./logger');
+const { startHeartbeat } = require('./services/heartbeat-service');
 
 const logger = createLogger('main');
 let mainWindow;
@@ -39,6 +40,7 @@ app.whenReady().then(() => {
   logger.info("ipc_handlers_registered");
 
   createWindow();
+  startHeartbeat();
 
   app.on('activate', function () {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
