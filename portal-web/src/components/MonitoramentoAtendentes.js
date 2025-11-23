@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
 import { User, Wifi, WifiOff, Clock, PauseCircle } from 'lucide-react';
 import api from '../api';
+import '../App.css'; // Garante acesso às variáveis
 
 function MonitoramentoAtendentes() {
   const [usuarios, setUsuarios] = useState([]);
@@ -9,10 +9,12 @@ function MonitoramentoAtendentes() {
 
   const fetchUsuarios = async () => {
     try {
+      // Idealmente, o backend deveria ter um endpoint /usuarios?role=admin
+      // Mas faremos a filtragem no front para manter compatibilidade rápida
       const res = await api.get('/usuarios');
       setUsuarios(res.data);
     } catch (error) {
-      console.error("Erro ao buscar usuários", error);
+      console.error("Erro ao buscar status da equipe", error);
     } finally {
       setLoading(false);
     }
@@ -20,102 +22,121 @@ function MonitoramentoAtendentes() {
 
   useEffect(() => {
     fetchUsuarios();
-    const interval = setInterval(fetchUsuarios, 30000); // Atualiza a cada 30s
+    const interval = setInterval(fetchUsuarios, 15000); // Atualiza a cada 15s (mais rápido é melhor para realtime)
     return () => clearInterval(interval);
   }, []);
 
   const formatLastSeen = (dateStr) => {
     if (!dateStr) return "Nunca acessou";
     const date = new Date(dateStr);
-    // Se for hoje, mostra só a hora
-    if (date.toDateString() === new Date().toDateString()) {
-        return `Hoje às ${date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
-    }
-    return date.toLocaleString('pt-BR');
+    const now = new Date();
+    const isToday = date.toDateString() === now.toDateString();
+    
+    return isToday 
+      ? `Hoje às ${date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`
+      : date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
   };
 
-  if (loading) return <p className="text-center py-4 text-slate-400 text-sm">Carregando status...</p>;
+  // CORREÇÃO 1: Filtra apenas quem é ADMIN (Staff)
+  // Ignora usuários comuns e superusers se desejar (ou mantem superusers se eles usam o app local)
+  const equipe = usuarios.filter(u => u.is_admin === true);
 
-  const atendentes = usuarios.filter(u => !u.is_superuser);
+  if (loading) return (
+    <div className="monitoramento-loading">
+      <div className="spinner-mini"></div> Carregando status da equipe...
+    </div>
+  );
 
   return (
-    <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-      <div className="p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
-        <h3 className="font-bold text-slate-700 flex items-center gap-2 text-sm uppercase tracking-wide">
-            <User size={16} /> Equipe em Tempo Real
+    <div className="monitoramento-card">
+      <div className="monitoramento-header">
+        <h3>
+            <User size={18} /> Central de Monitoramento
         </h3>
-        <span className="text-[10px] text-slate-400 font-mono">LIVE</span>
+        <div className="live-badge">
+            <span className="pulse-dot"></span> LIVE
+        </div>
       </div>
       
-      <div className="divide-y divide-slate-100">
-        {atendentes.length === 0 ? (
-            <p className="p-6 text-center text-slate-500 text-sm">Nenhum atendente cadastrado.</p>
+      <div className="monitoramento-lista">
+        {equipe.length === 0 ? (
+            <p className="empty-state-mini">Nenhum administrador encontrado.</p>
         ) : (
-            atendentes.map(user => {
-                const diffSeconds = user.last_heartbeat 
-                    ? (new Date().getTime() - new Date(user.last_heartbeat).getTime()) / 1000 
-                    : 99999;
+            equipe.map(user => {
+                // Lógica de Tempo
+                const lastHeartbeat = user.last_heartbeat ? new Date(user.last_heartbeat).getTime() : 0;
+                const now = new Date().getTime();
+                const diffSeconds = (now - lastHeartbeat) / 1000;
                 
-                let status = 'offline';
-                let label = 'Desconectado';
-                let colorClass = 'bg-slate-100 text-slate-500 border-slate-200';
-                let Icon = WifiOff;
-                let dotColor = 'bg-slate-400';
+                // Máquina de Estados de Conexão
+                let statusConfig = {
+                    state: 'offline',
+                    label: 'Desconectado',
+                    icon: WifiOff,
+                    cssClass: 'status-offline'
+                };
 
-                // Lógica de 3 Estados
+                // Se teve sinal nos últimos 90 segundos
                 if (diffSeconds < 90) {
                     if (user.connection_status === 'working_offline') {
-                         status = 'warning';
-                         label = 'Modo Offline';
-                         colorClass = 'bg-amber-50 text-amber-700 border-amber-200';
-                         Icon = PauseCircle;
-                         dotColor = 'bg-amber-500';
+                         statusConfig = {
+                             state: 'warning',
+                             label: 'Modo Offline', // Clicou em "Trabalhar Offline"
+                             icon: PauseCircle,
+                             cssClass: 'status-warning'
+                         };
                     } else {
-                         status = 'online';
-                         label = 'Online';
-                         colorClass = 'bg-green-50 text-green-700 border-green-200';
-                         Icon = Wifi;
-                         dotColor = 'bg-green-500';
+                         statusConfig = {
+                             state: 'online',
+                             label: 'Online', // App Local com internet
+                             icon: Wifi,
+                             cssClass: 'status-online'
+                         };
                     }
-                } else {
-                    // Se demorou muito, assume offline mesmo que o status fosse 'working_offline'
-                    // Mas podemos manter o status se quisermos saber que ele SAIU intencionalmente
-                    if (user.connection_status === 'working_offline' && diffSeconds < 3600) { // Até 1h
-                         status = 'warning';
-                         label = 'Modo Offline';
-                         colorClass = 'bg-amber-50 text-amber-700 border-amber-200';
-                         Icon = PauseCircle;
-                         dotColor = 'bg-amber-500';
-                    }
+                } 
+                // Caso especial: Estava trabalhando offline, mas sumiu há muito tempo (> 1 hora)
+                else if (user.connection_status === 'working_offline' && diffSeconds < 3600) {
+                    statusConfig = {
+                        state: 'warning',
+                        label: 'Sem Sincronia',
+                        icon: PauseCircle,
+                        cssClass: 'status-warning'
+                    };
                 }
 
+                const Icon = statusConfig.icon;
+
                 return (
-                    <div key={user.id} className="p-4 flex items-center justify-between hover:bg-slate-50 transition-colors group">
+                    <div key={user.id} className="atendente-row">
                         
-                        {/* Esquerda: Avatar + Nome */}
-                        <div className="flex items-center gap-3">
-                            <div className="relative">
-                                <div className="w-10 h-10 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-600 font-bold text-sm">
+                        {/* Avatar e Dados */}
+                        <div className="atendente-info">
+                            <div className={`avatar-wrapper ${statusConfig.state}`}>
+                                <span className="avatar-initials">
                                     {user.full_name ? user.full_name.charAt(0) : user.username.charAt(0).toUpperCase()}
-                                </div>
-                                {/* Bolinha de Status no Avatar */}
-                                <div className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-white ${dotColor}`}></div>
+                                </span>
+                                <div className="status-dot-absolute"></div>
                             </div>
                             <div>
-                                <p className="text-sm font-bold text-slate-700">{user.full_name || user.username}</p>
-                                <p className="text-[11px] text-slate-400">{user.email}</p>
+                                <p className="atendente-nome">{user.full_name || user.username}</p>
+                                <p className="atendente-meta">
+                                    {user.email} • ID: {user.id}
+                                </p>
                             </div>
                         </div>
 
-                        {/* Direita: Badge + Tempo */}
-                        <div className="text-right">
-                            <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide border ${colorClass}`}>
-                                <Icon size={12} />
-                                {label}
+                        {/* Status Badge */}
+                        <div className="atendente-status">
+                            <div className={`badge-connection ${statusConfig.cssClass}`}>
+                                <Icon size={12} strokeWidth={3} />
+                                <span>{statusConfig.label}</span>
                             </div>
-                            <p className="text-[10px] text-slate-400 mt-1 flex items-center justify-end gap-1">
+                            <p className="last-seen">
                                 <Clock size={10} />
-                                {status === 'online' ? 'Ativo agora' : `Visto: ${formatLastSeen(user.last_heartbeat)}`}
+                                {statusConfig.state === 'online' 
+                                    ? 'Ativo agora' 
+                                    : `Visto: ${formatLastSeen(user.last_heartbeat)}`
+                                }
                             </p>
                         </div>
                     </div>

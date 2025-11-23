@@ -381,6 +381,127 @@ body {
 .qr-container img { display: block; width: 200px; height: 200px; }
 .token-display { display: block; margin-top: 8px; font-family: monospace; background-color: var(--bg-element); padding: 8px; border-radius: 4px; letter-spacing: 2px; font-weight: bold; }
 
+.monitoramento-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+  transition: var(--transition);
+  display: flex;
+  flex-direction: column;
+}
+
+.monitoramento-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-color);
+  background-color: var(--bg-element); /* Sutilmente diferente do fundo */
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.monitoramento-header h3 {
+  margin: 0;
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+}
+
+.live-badge {
+  font-size: 0.7rem;
+  font-family: monospace;
+  color: var(--danger);
+  background: rgba(220, 38, 38, 0.1);
+  padding: 2px 8px;
+  border-radius: 100px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: bold;
+}
+
+.pulse-dot {
+  width: 6px; height: 6px;
+  background-color: var(--danger);
+  border-radius: 50%;
+  animation: pulse-red 1.5s infinite;
+}
+
+@keyframes pulse-red {
+  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.7); }
+  70% { transform: scale(1); box-shadow: 0 0 0 4px rgba(220, 38, 38, 0); }
+  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); }
+}
+
+.monitoramento-lista {
+  display: flex;
+  flex-direction: column;
+}
+
+.atendente-row {
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border-color);
+  transition: background-color 0.2s ease;
+}
+.atendente-row:last-child { border-bottom: none; }
+.atendente-row:hover { background-color: var(--bg-element); }
+
+/* Avatar e Info */
+.atendente-info { display: flex; align-items: center; gap: 12px; }
+
+.avatar-wrapper {
+  width: 40px; height: 40px;
+  border-radius: 50%;
+  background-color: var(--bg-element);
+  border: 1px solid var(--border-color);
+  display: flex; align-items: center; justify-content: center;
+  position: relative;
+  color: var(--text-primary);
+  font-weight: bold;
+  font-size: 0.9rem;
+}
+
+.status-dot-absolute {
+  position: absolute; bottom: -1px; right: -1px;
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  border: 2px solid var(--bg-surface); /* Borda da cor do fundo para recorte */
+}
+
+/* Cores de Estado (Usando variáveis globais) */
+.avatar-wrapper.online .status-dot-absolute { background-color: var(--success); }
+.avatar-wrapper.warning .status-dot-absolute { background-color: var(--warning); }
+.avatar-wrapper.offline .status-dot-absolute { background-color: var(--text-secondary); }
+
+.atendente-nome { margin: 0; font-size: 0.95rem; font-weight: 600; color: var(--text-primary); }
+.atendente-meta { margin: 2px 0 0 0; font-size: 0.8rem; color: var(--text-secondary); }
+
+/* Badges do Lado Direito */
+.atendente-status { text-align: right; }
+
+.badge-connection {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px;
+  border-radius: 100px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.status-online { background-color: var(--success-bg); color: var(--success); border: 1px solid transparent; }
+.status-warning { background-color: #FEF3C7; color: #B45309; border: 1px solid #FCD34D; }
+.status-offline { background-color: var(--bg-element); color: var(--text-secondary); border: 1px solid var(--border-color); }
+
 /* --- DARK MODE (Premium Corporate Dark) --- */
 .App.dark {
   /* Fundo Profundo */
@@ -480,4 +601,21 @@ body {
 .App.dark .btn-novo-evento,
 .App.dark .btn-certificado {
   color: #0F172A !important; /* Texto escuro no botão azul claro */
+}
+
+/* Dark Mode Adjustments para Warning */
+.App.dark .status-warning { background-color: rgba(245, 158, 11, 0.2); color: #FBBF24; border-color: rgba(245, 158, 11, 0.3); }
+
+.last-seen {
+  margin-top: 6px;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  display: flex; align-items: center; justify-content: flex-end; gap: 4px;
+}
+
+.monitoramento-loading {
+  text-align: center; padding: 32px; color: var(--text-secondary); font-size: 0.9rem;
+}
+.empty-state-mini {
+  padding: 24px; text-align: center; color: var(--text-secondary); font-style: italic;
 }
