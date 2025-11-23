@@ -5,7 +5,7 @@ const { createLogger } = require("../logger");
 const logger = createLogger("api-service");
 
 // FORÇA IPv4: Evita que o Node tente ::1 (IPv6) e falhe silenciosamente
-const BASE_URL = "http://127.0.0.1:80";
+const BASE_URL = "http://177.44.248.76:80";
 
 const api = axios.create({
   baseURL: BASE_URL,

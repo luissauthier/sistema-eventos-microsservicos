@@ -47,7 +47,7 @@ function applySecurityHooks(win, logger) {
         "Content-Security-Policy": [
           "default-src 'self'; " +
           "script-src 'self'; " +
-          "connect-src 'self' http://localhost:* http://127.0.0.1:*; " +
+          "connect-src 'self' http://localhost:* http://127.0.0.1:* http://177.44.248.76:*; " +
           "img-src 'self' data:; " +
           "style-src 'self' 'unsafe-inline'; " +
           "font-src 'self' data:; " +

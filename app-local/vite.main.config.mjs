@@ -1,7 +1,11 @@
 import { defineConfig } from "vite";
 import { builtinModules } from "module";
 import path from "path";
-import { copyStaticMain } from "./scripts/copy-static-main.js";
+const { copyStaticMain } = require("./scripts/copy-static-main.js");
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 export default defineConfig({
   root: path.resolve(__dirname, "./src/main"),

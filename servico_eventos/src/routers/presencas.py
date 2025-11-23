@@ -13,6 +13,7 @@ from services.integracao import (
     fetch_user_data,
     emitir_certificado_sincrono
 )
+from servico_comum import logger
 from servico_comum.exceptions import ServiceError
 from servico_comum.responses import success
 
@@ -36,6 +37,7 @@ async def realizar_checkin_logica(insc, origem, background, db):
         user_data = await fetch_user_data(insc.usuario_id)
         user_email = user_data.get("email")
         evento = insc.evento  # Assumindo carregado ou lazy loading
+        user_nome = user_data.get("full_name") or user_data.get("username") or "Participante"
         
         # Tarefa 1: Emitir Certificado
         cert_data = await emitir_certificado_sincrono(insc, user_email, evento)
@@ -56,10 +58,11 @@ async def realizar_checkin_logica(insc, origem, background, db):
         background.add_task(send_notification_guaranteed, {
             "tipo": "checkin",
             "destinatario": user_email,
+            "nome": user_nome,
             "nome_evento": evento.nome
         })
     except Exception as e:
-        print(f"Erro no fluxo pós-checkin: {e}")
+        logger.error(f"Erro no fluxo pós-checkin: {e}")
 
     return presenca
 
