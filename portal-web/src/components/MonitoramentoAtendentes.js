@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, Wifi, WifiOff, Clock, PauseCircle } from 'lucide-react';
 import api from '../api';
-import '../App.css'; // Garante acesso às variáveis
+import '../App.css';
 
 function MonitoramentoAtendentes() {
   const [usuarios, setUsuarios] = useState([]);
@@ -9,12 +9,16 @@ function MonitoramentoAtendentes() {
 
   const fetchUsuarios = async () => {
     try {
-      // Idealmente, o backend deveria ter um endpoint /usuarios?role=admin
-      // Mas faremos a filtragem no front para manter compatibilidade rápida
       const res = await api.get('/usuarios');
-      setUsuarios(res.data);
+      if (Array.isArray(res.data)) {
+        setUsuarios(res.data);
+      } else {
+        console.warn("A API retornou algo que não é uma lista de usuários:", res.data);
+        setUsuarios([]);
+      }
     } catch (error) {
       console.error("Erro ao buscar status da equipe", error);
+      setUsuarios([]);
     } finally {
       setLoading(false);
     }
@@ -22,7 +26,7 @@ function MonitoramentoAtendentes() {
 
   useEffect(() => {
     fetchUsuarios();
-    const interval = setInterval(fetchUsuarios, 15000); // Atualiza a cada 15s (mais rápido é melhor para realtime)
+    const interval = setInterval(fetchUsuarios, 15000);
     return () => clearInterval(interval);
   }, []);
 
@@ -37,9 +41,7 @@ function MonitoramentoAtendentes() {
       : date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
   };
 
-  // CORREÇÃO 1: Filtra apenas quem é ADMIN (Staff)
-  // Ignora usuários comuns e superusers se desejar (ou mantem superusers se eles usam o app local)
-  const equipe = usuarios.filter(u => u.is_admin === true);
+  const equipe = Array.isArray(usuarios) ? usuarios.filter(u => u.is_admin === true) : [];
 
   if (loading) return (
     <div className="monitoramento-loading">
