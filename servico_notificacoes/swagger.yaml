@@ -1,0 +1,44 @@
+openapi: 3.0.0
+info:
+  title: Serviço de Notificações
+  description: API responsável pelo envio de e-mails assíncronos.
+  version: 1.0.0
+servers:
+  - url: http://localhost:8004
+    description: Servidor Local
+
+paths:
+  /emails:
+    post:
+      summary: Envia um e-mail
+      description: Coloca uma solicitação de envio de e-mail na fila.
+      tags:
+        - Notificações
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - destinatario
+                - assunto
+                - mensagem
+              properties:
+                destinatario:
+                  type: string
+                  format: email
+                  example: usuario@teste.com
+                assunto:
+                  type: string
+                  example: "Bem-vindo ao Sistema!"
+                mensagem:
+                  type: string
+                  example: "Olá, seu cadastro foi realizado com sucesso."
+      responses:
+        200:
+          description: E-mail enviado (ou enfileirado) com sucesso.
+        400:
+          description: Dados inválidos.
+        500:
+          description: Erro interno.

@@ -4,9 +4,13 @@ const crypto = require("crypto");
 const routes = require("./routes");
 const logger = require("./config/logger");
 
+const swaggerDocument = yaml.load(path.join(__dirname, 'swagger.yaml'));
+
 const app = express();
 
 app.use(express.json());
+app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+app.use(routes);
 
 // Middleware de Log de Request (Interceptor)
 app.use((req, res, next) => {

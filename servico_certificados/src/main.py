@@ -13,6 +13,7 @@ app = FastAPI(
     title="Serviço de Certificados",
     description="Motor de geração e validação de documentos digitais",
     version="1.0.0",
+    root_path="/certificados",
 )
 
 # Middlewares Corporativos

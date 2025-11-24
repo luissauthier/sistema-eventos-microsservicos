@@ -17,6 +17,7 @@ app = FastAPI(
     title="Serviço de Usuários",
     description="API de Identidade e Gestão de Usuários",
     version="2.0.0",
+    root_path="/usuarios",
 )
 
 app.add_middleware(RequestIDMiddleware)

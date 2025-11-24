@@ -16,7 +16,9 @@ const VALID_CHANNELS = [
   "cancelar-checkin-local",
   "cancelar-inscricao-local",
   "realizar-checkin-rapido",
-  "log-message"
+  "log-message",
+  "set-mode-offline",
+  "get-network-status"
 ];
 
 /**
