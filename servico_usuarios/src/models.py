@@ -45,6 +45,7 @@ class User(Base):
     is_verified = Column(Boolean, default=False, nullable=False)
     must_change_password = Column(Boolean, default=False, nullable=False)
     last_heartbeat = Column(DateTime(timezone=True), nullable=True)
+    connection_status = Column(String(50), nullable=True, default="offline")
     # ---------------------------
     # Auditoria
     # ---------------------------

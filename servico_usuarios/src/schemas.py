@@ -91,6 +91,8 @@ class User(BaseModel):
     must_change_password: bool
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+    last_heartbeat: Optional[datetime] = None
+    connection_status: Optional[str] = None
 
     class Config:
         from_attributes = True
