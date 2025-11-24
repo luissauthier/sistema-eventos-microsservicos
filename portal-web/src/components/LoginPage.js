@@ -26,7 +26,7 @@ function LoginPage({ onLogin, theme }) {
       formData.append('username', username);
       formData.append('password', password);
 
-      const res = await api.post('/auth/login', formData, {
+      const res = await api.post('/auth', formData, {
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded'
         }

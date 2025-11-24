@@ -79,7 +79,7 @@ def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
 def read_me(current_user: models.User = Depends(get_current_user_from_db)):
     """
     Perfil do usuário logado.
-    Agora usa 'get_current_user_from_db' para garantir que retorna o objeto completo.
+    A Rota deve ser EXPLICITAMENTE /usuarios/me para casar com o Nginx.
     """
     return current_user
 
@@ -143,7 +143,7 @@ def get_user_by_id(
 
 @router.post("/usuarios/heartbeat", status_code=204)
 def registrar_batimento(
-    payload: HeartbeatSchema, # <--- Agora aceita payload JSON
+    payload: HeartbeatSchema,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user_from_db)
 ):
@@ -151,6 +151,6 @@ def registrar_batimento(
     Recebe: { "status": "online" } ou { "status": "working_offline" }
     """
     current_user.last_heartbeat = datetime.now(timezone.utc)
-    current_user.connection_status = payload.status # Salva o status informado
+    current_user.connection_status = payload.status
     db.commit()
     return
