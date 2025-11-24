@@ -27,6 +27,7 @@
       - "80:80" # A porta principal do projeto
     volumes:
       - ./gateway/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./gateway/html:/usr/share/nginx/html/custom_errors
     depends_on:
       - servico_usuarios
       - servico_eventos

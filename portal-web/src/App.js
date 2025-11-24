@@ -1,10 +1,14 @@
 import React, { useState, useEffect } from 'react';
+import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { AnimatePresence, motion } from 'framer-motion';
 import './App.css';
+
+// Ícones e Assets
 import logoLight from './nexstage_sem_fundo_escuro.svg';
 import logoDark from './nexstage_sem_fundo_branco.svg';
-import { LogOut, Sun, Moon, PlusCircle, Calendar, Ticket, User, FileCheck, LogIn } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { LogOut, Sun, Moon, PlusCircle, Calendar, Ticket, User as UserIcon, FileCheck, LogIn } from 'lucide-react';
 
+// Páginas
 import LoginPage from './components/LoginPage';
 import RegisterPage from './components/RegisterPage';
 import EventosPage from './components/EventosPage';
@@ -15,300 +19,202 @@ import CriarEventoPage from './components/CriarEventoPage';
 import CheckinPage from './components/CheckinPage';
 import CheckinRealizadoPage from './components/CheckinRealizadoPage';
 import ChangePasswordScreen from './components/ChangePasswordScreen';
+import NotFoundPage from './components/NotFoundPage';
 
-const pageVariants = {
-  initial: { opacity: 0, y: 20 },
-  in: { opacity: 1, y: 0 },
-  out: { opacity: 0, y: -20 }
-};
-const pageTransition = {
-  type: "tween",
-  ease: "anticipate",
-  duration: 0.5
-};
+// Animações
+
 export const buttonHoverTap = {
   whileHover: { scale: 1.03 },
   whileTap: { scale: 0.98 }
 };
 
-function App() {
-  const [authToken, setAuthToken] = useState(localStorage.getItem('access_token'));
+// ==========================================
+// 1. COMPONENTES DE LAYOUT E PROTEÇÃO
+// ==========================================
+
+// Layout que engloba a navegação para usuários LOGADOS
+const ProtectedLayout = ({ user, logout, theme, toggleTheme }) => {
+  const location = useLocation();
   
-  const [user, setUser] = useState(() => {
-    const savedUser = localStorage.getItem('user');
-    try {
-      return savedUser ? JSON.parse(savedUser) : null;
-    } catch {
-      return null;
-    }
-  });
+  if (!user) return <Navigate to="/login" replace />;
+  if (user.must_change_password) {
+      return <ChangePasswordScreen onPasswordChanged={onPasswordChanged} />;
+  }
 
-  // Estes estados estavam abaixo do 'if' no seu código original, causando o erro.
-  // Agora estão aqui em cima, seguros.
-  const [eventoGerenciando, setEventoGerenciando] = useState(null);
-  const [pagina, setPagina] = useState(authToken ? 'eventos' : 'login'); 
-  const [eventoEditando, setEventoEditando] = useState(null);
-  const [theme, setTheme] = useState('light');
-  
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const path = window.location.pathname;
-
-    if (params.get('codigo') || path === '/validar') {
-        setPagina('validar');
-        return; // Prioridade máxima, interrompe o resto
-    }
-
-    const tokenUrl = params.get('token');
-    
-    // Se a URL tem ?token=... (Vindo do QR Code)
-    if (tokenUrl) {
-        // Verifica se está logado
-        const savedUser = localStorage.getItem('user');
+  return (
+    <div className={`App ${theme}`}>
+      <header className="App-header">
+        <div className="logo-container">
+            <img src={theme === 'light' ? logoLight : logoDark} alt="NexStage" className="App-logo" />
+        </div>
         
+        <nav className="main-nav">
+          <LinkButton to="/eventos" icon={Calendar} label="Eventos" active={location.pathname === '/eventos'} />
+          <LinkButton to="/inscricoes" icon={Ticket} label="Minhas Inscrições" active={location.pathname === '/inscricoes'} />
+          <LinkButton to="/perfil" icon={UserIcon} label="Perfil" active={location.pathname === '/perfil'} />
+          
+          {user.is_admin && (
+            <LinkButton to="/criar-evento" icon={PlusCircle} label="Evento" active={location.pathname === '/criar-evento'} className="btn-admin" />
+          )}
+        </nav>
 
-        if (savedUser) {
-            // Se já está logado, vai direto para a página de confirmação
-            setPagina('checkin-confirmar');
-        } else {
-            // Se NÃO está logado, salva o token para usar depois do login
-            localStorage.setItem('pending_checkin_token', tokenUrl);
-            setPagina('login'); // Força tela de login
-        }
-    }
-  }, []);
+        <div className="header-actions">
+           <ThemeToggle theme={theme} toggleTheme={toggleTheme} />
+           <button onClick={logout} className="btn-logout" title="Sair"><LogOut size={16} /> <span>Sair</span></button>
+        </div>
+      </header>
+      
+      <div className="conteudo">
+        <PageTransition>
+            <Outlet /> {/* Aqui renderiza a página filha (Eventos, Perfil, etc) */}
+        </PageTransition>
+      </div>
+    </div>
+  );
+};
 
-  // 2. HANDLERS E FUNÇÕES AUXILIARES
+// Layout para páginas PÚBLICAS (Login, Registro, Validar)
+const PublicLayout = ({ theme, toggleTheme }) => {
+    const location = useLocation();
+    return (
+        <div className={`App ${theme}`}>
+          <header className="App-header">
+            <div className="logo-container">
+                <img src={theme === 'light' ? logoLight : logoDark} alt="NexStage" className="App-logo" />
+            </div>
+             <nav className="main-nav">
+                <LinkButton to="/validar" icon={FileCheck} label="Validar certificado" active={location.pathname === '/validar'} />
+                <LinkButton to="/login" icon={LogIn} label="Login" active={location.pathname === '/login'} />
+             </nav>
+            <div className="header-actions">
+                <ThemeToggle theme={theme} toggleTheme={toggleTheme} />
+            </div>
+          </header>
+          <div className="conteudo">
+             <PageTransition>
+                <Outlet />
+             </PageTransition>
+          </div>
+        </div>
+    );
+};
+
+// Componentes Auxiliares de UI
+const LinkButton = ({ to, icon: Icon, label, active, className = '' }) => {
+    const navigate = useNavigate();
+    return (
+        <button className={`${className} ${active ? 'active' : ''}`} onClick={() => navigate(to)}>
+            <Icon size={18} /><span>{label}</span>
+        </button>
+    );
+}
+
+const ThemeToggle = ({ theme, toggleTheme }) => (
+    <motion.button onClick={toggleTheme} className="theme-toggle" whileTap={{ scale: 0.9, rotate: 15 }}>
+        {theme === 'light' ? <Moon size={20} /> : <Sun size={20} />}
+    </motion.button>
+);
+
+const PageTransition = ({ children }) => (
+    <AnimatePresence mode="wait">
+        <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.3 }}
+            style={{ width: '100%' }}
+        >
+            {children}
+        </motion.div>
+    </AnimatePresence>
+);
+
+
+// ==========================================
+// 2. APLICAÇÃO PRINCIPAL (ROTEAMENTO)
+// ==========================================
+
+function App() {
+  // Estado Global
+  const [user, setUser] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('user')); } catch { return null; }
+  });
+  const [theme, setTheme] = useState('light');
+
+  // Controle de Login
   const handleLoginSuccess = (usuarioLogado) => {
-      setUser(usuarioLogado);
-      setAuthToken(localStorage.getItem('access_token'));
-      if (localStorage.getItem('pending_checkin_token')) {
-          setPagina('checkin-confirmar');
-      } else {
-          setPagina('eventos');
-      }
-  };
-
-  const handlePasswordChanged = () => {
-      setUser(prevUser => {
-          const updatedUser = { ...prevUser, must_change_password: false };
-          localStorage.setItem('user', JSON.stringify(updatedUser));
-          return updatedUser;
-      });
+    setUser(usuarioLogado);
+    // Nota: O redirecionamento acontece dentro do componente LoginPage agora
   };
 
   const handleLogout = () => {
     localStorage.removeItem('access_token');
     localStorage.removeItem('user');
-    localStorage.removeItem('pending_checkin_token');
-    setAuthToken(null);
     setUser(null);
-    setPagina('login');
   };
 
-  const toggleTheme = () => {
-    setTheme(theme === 'light' ? 'dark' : 'light');
+  const handlePasswordChanged = () => {
+      setUser(prev => {
+          const updated = { ...prev, must_change_password: false };
+          localStorage.setItem('user', JSON.stringify(updated));
+          return updated;
+      });
   };
 
-  const lastPage = localStorage.getItem('last_public_page');
-  if (!user && !authToken && !['register', 'validar', 'login'].includes(pagina)) {
-     if (pagina !== 'login' && pagina !== 'register' && pagina !== 'validar') {
-        return <LoginPage onLogin={handleLoginSuccess} setPagina={setPagina} theme={theme} />;
-     }
-  }
+  const toggleTheme = () => setTheme(prev => prev === 'light' ? 'dark' : 'light');
 
-  // Proteção de Troca de Senha
-  if (user && user.must_change_password) {
-      return <ChangePasswordScreen onPasswordChanged={handlePasswordChanged} />;
-  }
-
-  // --- RENDERIZAÇÃO DE TELAS ---
-  const renderPaginaPrincipal = () => {
-    
-    // Páginas Públicas (Não Logado)
-    if (!authToken) {
-      if (pagina === 'login') return (
-        <motion.div key="login" variants={pageVariants} initial="initial" animate="in" exit="out" transition={pageTransition}>
-          <LoginPage onLogin={handleLoginSuccess} setPagina={setPagina} theme={theme}/>
-        </motion.div>
-      );
-      if (pagina === 'register') return (
-        <motion.div key="register" variants={pageVariants} initial="initial" animate="in" exit="out" transition={pageTransition}>
-          <RegisterPage setPagina={setPagina} theme={theme}/>
-        </motion.div>
-      );
-      if (pagina === 'validar') return (
-        <motion.div key="validar" variants={pageVariants} initial="initial" animate="in" exit="out" transition={pageTransition}>
-          <ValidateCertificatePage setPagina={setPagina} />
-        </motion.div>
-      );
-    }
-    
-    // Páginas Protegidas (Logado)
-    if (authToken) {
-      if (pagina === 'eventos') return (
-        <motion.div key="eventos" variants={pageVariants} initial="initial" animate="in" exit="out" transition={pageTransition}>
-          <EventosPage user={user} 
-            setPagina={setPagina} 
-            setEventoEditando={setEventoEditando} 
-            setEventoGerenciando={setEventoGerenciando}
-          />
-        </motion.div>
-      );
-      if (pagina === 'inscricoes') return (
-        <motion.div key="inscricoes" variants={pageVariants} initial="initial" animate="in" exit="out" transition={pageTransition}>
-          <InscricoesPage />
-        </motion.div>
-      );
-      if (pagina === 'perfil') return (
-        <motion.div key="perfil" variants={pageVariants} initial="initial" animate="in" exit="out" transition={pageTransition}>
-          <ProfilePage />
-        </motion.div>
-      );
-      
-      if (pagina === 'criar-evento' && user && user.is_admin) return (
-        <motion.div key="criar-evento" variants={pageVariants} initial="initial" animate="in" exit="out" transition={pageTransition}>
-          <CriarEventoPage 
-             setPagina={setPagina} 
-             eventoEditando={eventoEditando} 
-          />
-        </motion.div>
-      );
-      if (pagina === 'checkin-qr' && user && user.is_admin) return (
-        <motion.div key="checkin-qr" variants={pageVariants} initial="initial" animate="in" exit="out" transition={pageTransition}>
-          <CheckinPage 
-            setPagina={setPagina} 
-            evento={eventoGerenciando} 
-          />
-        </motion.div>
-      );
-      if (pagina === 'checkin-confirmar') return (
-           <motion.div key="checkin-confirmar" variants={pageVariants} initial="initial" animate="in" exit="out" transition={pageTransition}>
-             <CheckinRealizadoPage setPagina={setPagina} />
-           </motion.div>
-        );
-      if (pagina === 'validar') return (
-        <motion.div key="validar" variants={pageVariants} initial="initial" animate="in" exit="out" transition={pageTransition}>
-          <ValidateCertificatePage setPagina={setPagina} />
-        </motion.div>
-      );
-    }
-    
-    // Fallback padrão
-    return (
-      <motion.div key="login-fallback" variants={pageVariants} initial="initial" animate="in" exit="out" transition={pageTransition}>
-        <LoginPage onLogin={handleLoginSuccess} setPagina={setPagina} />
-      </motion.div>
-    );
-  };
-
-  // --- COMPONENTE PRINCIPAL ---
   return (
-    <div className={`App ${theme}`}>
-      <header className="App-header">
-        
-        <div className="logo-container">
-            {/* 2. Lógica de troca baseada no tema */}
-            <img 
-              src={theme === 'light' ? logoLight : logoDark} 
-              alt="NexStage" 
-              className="App-logo" 
-            />
-        </div>
-        
-        {authToken && (
-          // --- NAV LOGADA (Centralizada via CSS) ---
-          <nav className="main-nav">
-            <button 
-              className={pagina === 'eventos' ? 'active' : ''}
-              onClick={() => setPagina('eventos')}
-            >
-              <Calendar size={18} />
-              <span>Eventos</span>
-            </button>
+    <BrowserRouter>
+        <Routes>
+            {/* --- ROTAS PÚBLICAS --- */}
+            <Route element={<PublicLayout theme={theme} toggleTheme={toggleTheme} />}>
+                <Route path="/login" element={<LoginPage onLogin={handleLoginSuccess} />} />
+                <Route path="/register" element={<RegisterPage />} />
+                <Route path="/validar" element={<ValidateCertificatePage />} />
+                {/* Redireciona raiz para login se não logado */}
+                <Route path="/" element={<Navigate to="/login" replace />} />
+            </Route>
 
-            <button 
-              className={pagina === 'inscricoes' ? 'active' : ''}
-              onClick={() => setPagina('inscricoes')}
-            >
-              <Ticket size={18} />
-              <span>Minhas Inscrições</span>
-            </button>
+            {/* --- ROTAS PROTEGIDAS (REQUER LOGIN) --- */}
+            <Route element={<ProtectedLayout user={user} logout={handleLogout} theme={theme} toggleTheme={toggleTheme} onPasswordChanged={handlePasswordChanged}/>}>
+                <Route path="/eventos" element={<EventosPage user={user} />} />
+                <Route path="/inscricoes" element={<InscricoesPage />} />
+                <Route path="/perfil" element={<ProfilePage />} />
+                <Route path="/criar-evento" element={user?.is_admin ? <CriarEventoPage /> : <Navigate to="/eventos" />} />
+                <Route path="/checkin-qr" element={user?.is_admin ? <CheckinPage /> : <Navigate to="/eventos" />} />
+                <Route path="/checkin-confirmar" element={<CheckinRealizadoPage />} />
+            </Route>
 
-            <button 
-              className={pagina === 'perfil' ? 'active' : ''}
-              onClick={() => setPagina('perfil')}
-            >
-              <User size={18} />
-              <span>Perfil</span>
-            </button>
-            
-            {/* Botão Admin: Destaque sutil */}
-            {user && user.is_admin && (
-              <button 
-                className={`btn-admin ${pagina === 'criar-evento' ? 'active' : ''}`}
-                onClick={() => setPagina('criar-evento')}
-                title="Área Administrativa"
-              >
-                <PlusCircle size={18} />
-                <span>Evento</span>
-              </button>
-            )}
-          </nav>
-        )}
+            {/* --- ROTA 404 (FALLBACK) --- */}
+            <Route path="*" element={<NotFoundPage />} />
+        </Routes>
         
-        {!authToken && (
-           // --- NAV PÚBLICA (Não logado) ---
-          <nav className="main-nav">
-             <button 
-              className={pagina === 'validar' ? 'active' : ''}
-              onClick={() => setPagina('validar')}
-            >
-              <FileCheck size={18} />
-              <span>Validar certificado</span>
-            </button>
-             <button 
-              className={pagina === 'login' ? 'active' : ''}
-              onClick={() => setPagina('login')}
-            >
-              <LogIn size={18} />
-              <span>Login</span>
-            </button>
-          </nav>
-        )}
-
-        {/* Ações à Direita */}
-        <div className="header-actions">
-          <motion.button 
-            onClick={toggleTheme} 
-            className="theme-toggle"
-            whileTap={{ scale: 0.9, rotate: 15 }}
-            title={theme === 'light' ? "Modo Escuro" : "Modo Claro"}
-          >
-            {theme === 'light' ? <Moon size={20} /> : <Sun size={20} />}
-          </motion.button>
-          
-          {authToken && (
-            <motion.button 
-              onClick={handleLogout} 
-              className="btn-logout"
-              {...buttonHoverTap}
-              title="Sair do sistema"
-            >
-              <LogOut size={16} />
-              <span>Sair</span>
-            </motion.button>
-          )}
-        </div>
-      </header>
-      
-      <div className="conteudo">
-        <AnimatePresence mode="wait">
-          {renderPaginaPrincipal()}
-        </AnimatePresence>
-      </div>
-    </div>
+        {/* Captura de Parâmetros de URL (ex: QR Code) - Hook Personalizado ou Componente Invisível */}
+        <AuthRedirectHandler user={user} />
+    </BrowserRouter>
   );
 }
+
+// Manipulador de Lógica de URL (QR Code Token)
+const AuthRedirectHandler = ({ user }) => {
+    const navigate = useNavigate();
+    const location = useLocation();
+
+    useEffect(() => {
+        const params = new URLSearchParams(location.search);
+        const tokenUrl = params.get('token');
+        
+        if (tokenUrl) {
+             if (user) {
+                 navigate('/checkin-confirmar');
+             } else {
+                 localStorage.setItem('pending_checkin_token', tokenUrl);
+                 navigate('/login');
+             }
+        }
+    }, [location, user, navigate]);
+
+    return null;
+};
 
 export default App;

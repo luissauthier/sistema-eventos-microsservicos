@@ -1,11 +1,17 @@
 // portal-web/src/components/CriarEventoPage.js
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Calendar, FileText, Type, Save, Layout } from 'lucide-react'; // Adicionei Layout e mantive Type
+import { useNavigate, useLocation } from 'react-router-dom';
+import { ArrowLeft, Calendar, FileText, Type, Save, Layout } from 'lucide-react';
 import api from '../api';
 import { buttonHoverTap } from '../App';
 
-const CriarEventoPage = ({ setPagina, eventoEditando }) => {
+const CriarEventoPage = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  
+  const eventoEditando = location.state?.eventoEditando;
+
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     nome: '',
@@ -17,7 +23,6 @@ const CriarEventoPage = ({ setPagina, eventoEditando }) => {
 
   useEffect(() => {
     if (eventoEditando) {
-      // Formata para o input datetime-local (YYYY-MM-DDTHH:mm)
       const dataFormatada = eventoEditando.data_evento
         ? new Date(eventoEditando.data_evento).toISOString().slice(0, 16)
         : '';
@@ -65,7 +70,7 @@ const CriarEventoPage = ({ setPagina, eventoEditando }) => {
         alert('Evento criado com sucesso!');
       }
 
-      setPagina('eventos');
+      navigate('/eventos');
     } catch (error) {
       console.error('Erro ao salvar:', error);
       alert('Ocorreu um erro ao salvar. Tente novamente.');
@@ -77,7 +82,7 @@ const CriarEventoPage = ({ setPagina, eventoEditando }) => {
   return (
     <div className="login-container" style={{ alignItems: 'flex-start', paddingTop: '20px' }}>
       <motion.div
-        className="login-card" // Reutiliza o estilo do card centralizado
+        className="login-card"
         style={{ maxWidth: '600px', width: '100%', textAlign: 'left' }}
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -87,8 +92,8 @@ const CriarEventoPage = ({ setPagina, eventoEditando }) => {
         {/* Cabeçalho do Form */}
         <div style={{ display: 'flex', alignItems: 'center', marginBottom: '24px', gap: '12px' }}>
             <motion.button
-              onClick={() => setPagina('eventos')}
-              className="btn-logout" // Reutiliza estilo de botão outline
+              onClick={() => navigate('/eventos')}
+              className="btn-logout"
               style={{ border: 'none', padding: '8px' }}
               {...buttonHoverTap}
               title="Voltar"
@@ -147,7 +152,6 @@ const CriarEventoPage = ({ setPagina, eventoEditando }) => {
               Descrição <span style={{fontWeight: 'normal', color: 'var(--text-secondary)'}}>(Opcional)</span>
             </label>
             <div style={{ position: 'relative' }}>
-                {/* O CSS .textarea-wrapper .input-left-icon já ajusta o top: 20px */}
                 <FileText className="input-left-icon" size={18} />
                 <textarea
                     name="descricao"
@@ -155,7 +159,6 @@ const CriarEventoPage = ({ setPagina, eventoEditando }) => {
                     value={formData.descricao}
                     onChange={handleChange}
                     placeholder="Detalhes sobre local, palestrantes, tópicos..."
-                    // Removido style={{ paddingLeft: '42px' }} - O CSS global já resolve
                 />
             </div>
           </div>
@@ -168,7 +171,6 @@ const CriarEventoPage = ({ setPagina, eventoEditando }) => {
                 <select
                     value={template}
                     onChange={(e) => setTemplate(e.target.value)}
-                    // Removido style={{ paddingLeft: '42px' }} - O CSS global já resolve
                 >
                     <option value="default">Corporativo (Padrão)</option>
                     <option value="tech">Tech / Inovação (Escuro)</option>
@@ -185,7 +187,7 @@ const CriarEventoPage = ({ setPagina, eventoEditando }) => {
           <motion.button
             type="submit"
             disabled={loading}
-            className="btn-login" // Reutiliza o botão principal largo
+            className="btn-login"
             style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginTop: '24px' }}
             {...(!loading ? buttonHoverTap : {})}
           >

@@ -1,6 +1,7 @@
 // portal-web/src/components/CheckinPage.js
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import { useNavigate, useLocation } from 'react-router-dom'; // <--- 1. Imports do Router
 import { RefreshCw, Clock, QrCode, ArrowLeft, Printer, AlertCircle } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import api from '../api';
@@ -12,7 +13,13 @@ const formatExpiration = (dateStr) => {
   return new Date(dateStr).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 };
 
-function CheckinPage({ setPagina, evento }) {
+function CheckinPage() { // <--- 2. Sem props
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  // Recupera o evento passado pelo state da navegação
+  const evento = location.state?.evento;
+
   const eventoId = evento?.id;
   const eventoNome = evento?.nome || "Evento Desconhecido";
   const [tokenData, setTokenData] = useState(null);
@@ -75,7 +82,7 @@ function CheckinPage({ setPagina, evento }) {
         
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
            <motion.button 
-             onClick={() => setPagina('eventos')} 
+             onClick={() => navigate('/eventos')} // <--- 3. Navegação via Router
              className="btn-logout" 
              style={{ border: 'none', padding: '8px' }}
              {...buttonHoverTap}

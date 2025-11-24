@@ -73,7 +73,7 @@ body {
   z-index: 50;
 }
 .App-logo { height: 48px; width: auto; }
-.Login-Rgister-logo { height: 144px; width: auto; }
+.Login-Register-logo { height: 144px; width: auto; }
 .header-actions { display: flex; align-items: center; gap: 16px; }
 
 /* --- NAVEGAÇÃO (Ilha Central) --- */

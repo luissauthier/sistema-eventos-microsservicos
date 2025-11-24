@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, ArrowRight, X, Plus, Edit2, QrCode, Calendar, Check } from 'lucide-react';
 import { buttonHoverTap } from '../App';
 import api from '../api';
@@ -15,10 +16,13 @@ const itemVariants = {
   visible: { opacity: 1, y: 0 }
 };
 
-function EventosPage({ setPagina, setEventoEditando, user }) { 
+function EventosPage({ user }) { 
+  const navigate = useNavigate();
+  
   const [eventos, setEventos] = useState([]);
   const [inscricoesIds, setInscricoesIds] = useState(new Set());  
   const [loading, setLoading] = useState(true);
+  
   const [eventoSelecionado, setEventoSelecionado] = useState(null);
   
   // Estado para o Modal de QR Code
@@ -38,8 +42,10 @@ function EventosPage({ setPagina, setEventoEditando, user }) {
 
       try {
         const resInsc = await api.get('/inscricoes/me');
-        const ativas = resInsc.data.filter(i => i.status?.toLowerCase() === 'ativa');
-        setInscricoesIds(new Set(ativas.map(i => i.evento_id)));
+        if (Array.isArray(resInsc.data)) {
+             const ativas = resInsc.data.filter(i => i.status?.toLowerCase() === 'ativa');
+             setInscricoesIds(new Set(ativas.map(i => i.evento_id)));
+        }
       } catch (e) { /* Ignora se não logado */ }
 
     } catch (err) {
@@ -85,14 +91,14 @@ function EventosPage({ setPagina, setEventoEditando, user }) {
     }
   };
 
+  // <--- Navegação para Edição (passando estado via Router)
   const handleEditar = (evento) => {
-    setEventoEditando(evento);
-    setPagina('criar-evento');
+    navigate('/criar-evento', { state: { eventoEditando: evento } });
   };
 
+  // <--- Navegação para Novo Evento
   const handleNovo = () => {
-    setEventoEditando(null);
-    setPagina('criar-evento');
+    navigate('/criar-evento');
   };
 
   if (loading) return <p className="loading-text" style={{textAlign: 'center', color: 'var(--text-secondary)'}}>Carregando eventos...</p>;
@@ -129,14 +135,13 @@ function EventosPage({ setPagina, setEventoEditando, user }) {
         // === VISÃO DE DETALHES (Refatorada) ===
         <motion.div 
           className="evento-detalhe" 
-          // Usamos a classe evento-detalhe do CSS, mas vamos sobrescrever o padding interno para dar mais ar
           style={{ padding: 0, overflow: 'hidden', maxWidth: '800px', margin: '0 auto' }}
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.3 }}
         >
           
-          {/* TOPO: Cabeçalho com cor de fundo suave */}
+          {/* TOPO: Cabeçalho */}
           <div style={{ 
               padding: '32px', 
               backgroundColor: 'var(--bg-element)', 
@@ -196,7 +201,6 @@ function EventosPage({ setPagina, setEventoEditando, user }) {
              
              <div style={{ marginTop: '48px', borderTop: '1px solid var(--border-color)', paddingTop: '32px', textAlign: 'right' }}>
                 <motion.button 
-                  // Reutilizando a classe do botão principal
                   className="btn-login"
                   style={{ 
                       width: 'auto', paddingLeft: '32px', paddingRight: '32px', 
@@ -276,7 +280,7 @@ function EventosPage({ setPagina, setEventoEditando, user }) {
                   </div>
 
                   <div className="card-actions-row">
-                    {/* Botão Detalhes (Sempre visível) */}
+                    {/* Botão Detalhes */}
                     <motion.button 
                       className="btn-detalhes"
                       onClick={() => setEventoSelecionado(evento)}
@@ -314,9 +318,10 @@ function EventosPage({ setPagina, setEventoEditando, user }) {
           </motion.div>
         </div>
       )}
-      {/* === MONITORAMENTO DE ATENDENTES (Admin) === */}
+      
+      {/* === MONITORAMENTO === */}
       {isAdmin && !eventoSelecionado && (
-        <div className="mb-8">
+        <div className="mb-8" style={{ marginTop: '40px' }}>
            <MonitoramentoAtendentes />
         </div>
       )}

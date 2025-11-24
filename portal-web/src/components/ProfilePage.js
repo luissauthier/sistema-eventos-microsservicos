@@ -1,7 +1,7 @@
 // portal-web/src/components/ProfilePage.js
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { User, Mail, Phone, MapPin, FileText, Save } from 'lucide-react'; // Ícones
+import { User, Mail, Phone, MapPin, FileText, Save } from 'lucide-react';
 import { buttonHoverTap } from '../App';
 import api from '../api'; 
 
@@ -48,7 +48,6 @@ function ProfilePage() {
     try {
       await api.patch('/usuarios/me', formData);
       setSuccess('Perfil atualizado com sucesso!');
-      // Remove msg de sucesso após 3s
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
       setError('Falha ao atualizar. Verifique se os dados são válidos.');
@@ -69,7 +68,7 @@ function ProfilePage() {
         className="login-card"
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        style={{ maxWidth: '600px', textAlign: 'left' }} // Ajuste específico para perfil
+        style={{ maxWidth: '600px', textAlign: 'left' }}
       >
         <div style={{ textAlign: 'center', marginBottom: '32px' }}>
           <div style={{ 
@@ -175,7 +174,7 @@ function ProfilePage() {
 
           <motion.button 
             type="submit" 
-            className="btn-login" // Reusa estilo do botão principal
+            className="btn-login"
             disabled={saving}
             style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
             {...buttonHoverTap}

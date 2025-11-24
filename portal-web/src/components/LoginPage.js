@@ -1,12 +1,16 @@
 // portal-web/src/components/LoginPage.js
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import { buttonHoverTap } from '../App'; 
 import api from '../api';
+
 import logoLight from '../nexstage_sem_fundo_escuro.svg';
 import logoDark from '../nexstage_sem_fundo_branco.svg';
 
-function LoginPage({ onLogin, setPagina, theme }) {
+function LoginPage({ onLogin, theme }) {
+  const navigate = useNavigate();
+  
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -18,22 +22,32 @@ function LoginPage({ onLogin, setPagina, theme }) {
     setLoading(true);
 
     try {
-      const response = await api.post('/auth', 
-        new URLSearchParams({ username, password }), 
-        { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
-      );
+      const formData = new URLSearchParams();
+      formData.append('username', username);
+      formData.append('password', password);
 
-      const { access_token } = response.data;
-      localStorage.setItem('access_token', access_token);
-
-      const userResp = await api.get('/usuarios/me', {
-        headers: { Authorization: `Bearer ${access_token}` }
+      const res = await api.post('/auth/login', formData, {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded'
+        }
       });
 
-      const user = userResp.data;
-      localStorage.setItem('user', JSON.stringify(user));
+      const { access_token } = res.data;
+      localStorage.setItem('access_token', access_token);
 
-      onLogin(user);
+      const userRes = await api.get('/usuarios/me');
+      const userData = userRes.data;
+      localStorage.setItem('user', JSON.stringify(userData));
+
+      onLogin(userData);
+
+      // Se houver um token de check-in pendente (leu QR code deslogado), vai para lá.
+      // Caso contrário, vai para a home (Eventos).
+      if (localStorage.getItem('pending_checkin_token')) {
+          navigate('/checkin-confirmar');
+      } else {
+          navigate('/eventos');
+      }
 
     } catch (err) {
       console.error(err);
@@ -58,7 +72,7 @@ function LoginPage({ onLogin, setPagina, theme }) {
             <img 
               src={theme === 'light' ? logoLight : logoDark} 
               alt="NexStage" 
-              className="Login-Rgister-logo" 
+              className="Login-Register-logo" 
             />
           </div>
           <h2 style={{ color: 'var(--primary)', fontWeight: '700' }}>Bem-vindo(a)</h2>
@@ -72,8 +86,7 @@ function LoginPage({ onLogin, setPagina, theme }) {
             <label>Usuário</label>
             <input 
               type="text" 
-              // CORREÇÃO 2: Placeholder focado no usuário final
-              placeholder="seu.email@exemplo.com" 
+              placeholder="Seu usuário"
               required 
               value={username}
               onChange={(e) => setUsername(e.target.value)}
@@ -108,7 +121,7 @@ function LoginPage({ onLogin, setPagina, theme }) {
             Ainda não tem cadastro? 
             <button 
               type="button"
-              onClick={() => setPagina('register')} 
+              onClick={() => navigate('/register')} 
               className="btn-link"
             >
               Criar conta

@@ -1,13 +1,16 @@
 // portal-web/src/components/RegisterPage.js
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
+import { useNavigate } from 'react-router-dom'; // <--- 1. Importação do Hook
 import { User, Mail, Lock, AtSign, ArrowRight } from 'lucide-react';
 import { buttonHoverTap } from '../App';
 import api from '../api';
 import logoLight from '../nexstage_sem_fundo_escuro.svg';
 import logoDark from '../nexstage_sem_fundo_branco.svg';
 
-function RegisterPage({ setPagina, theme}) {
+function RegisterPage({ theme }) { // <--- 2. Removemos 'setPagina'
+  const navigate = useNavigate(); // <--- 3. Instância do Hook
+  
   const [fullName, setFullName] = useState('');
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
@@ -30,7 +33,7 @@ function RegisterPage({ setPagina, theme}) {
       });
       
       alert('Cadastro realizado com sucesso! Faça login.');
-      setPagina('login');
+      navigate('/login'); // <--- 4. Redirecionamento via Rota
 
     } catch (err) {
       console.error(err);
@@ -52,11 +55,11 @@ function RegisterPage({ setPagina, theme}) {
         {/* CABEÇALHO DO CARD */}
         <div style={{ marginBottom: '24px' }}>
           <div className="logo-container">
-            {/* 2. Lógica de troca baseada no tema */}
+            {/* Lógica de troca baseada no tema */}
             <img 
               src={theme === 'light' ? logoLight : logoDark} 
               alt="NexStage" 
-              className="Login-Rgister-logo" 
+              className="Login-Register-logo" 
             />
           </div>
           <h2 style={{ color: 'var(--primary)', fontWeight: '700', marginBottom: '8px' }}>Crie sua conta</h2>
@@ -145,7 +148,7 @@ function RegisterPage({ setPagina, theme}) {
             Já possui uma conta? 
             <button 
               type="button"
-              onClick={() => setPagina('login')} 
+              onClick={() => navigate('/login')}
               className="btn-link"
             >
               Faça login

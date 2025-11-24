@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { CheckCircle, Clock, X, AlertTriangle, Download, Calendar} from 'lucide-react'; // Adicionei AlertTriangle
+import { useNavigate } from 'react-router-dom'; // <--- 1. Import do Router
+import { CheckCircle, Clock, X, AlertTriangle, Download, Calendar, ArrowRight } from 'lucide-react';
 import { buttonHoverTap } from '../App';
 import api from '../api';
 
@@ -14,13 +15,13 @@ const itemVariants = {
   visible: { opacity: 1, y: 0 }
 };
 
-// Componente "InscricoesPage" (Agora com dados reais)
 function InscricoesPage() {
+  const navigate = useNavigate(); // <--- 2. Hook de navegação
+  
   const [inscricoes, setInscricoes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // Função para buscar os dados da API (substitui 'fetchData')
   const carregarInscricoes = async () => {
     try {
       setLoading(true);
@@ -34,12 +35,10 @@ function InscricoesPage() {
     }
   };
 
-  // Executa o carregarInscricoes quando o componente carregar
   useEffect(() => {
     carregarInscricoes();
   }, []);
 
-  // Função de Cancelar (API Real, agora chamando carregarInscricoes)
   const handleCancelarInscricao = async (id) => {
     if (!window.confirm("Tem certeza que deseja cancelar sua inscrição?")) {
         return;
@@ -54,27 +53,17 @@ function InscricoesPage() {
   };
 
   const handleAbrirCertificado = (inscricao) => {
-    // Verifica se o objeto certificado existe e tem o código
     if (inscricao.certificado && inscricao.certificado.codigo_unico) {
-      
-      // Pega a URL base da API (ex: http://localhost/)
       const baseUrl = api.defaults.baseURL || 'http://177.44.248.76';
-      // Garante que não tenha barra duplicada
       const cleanBase = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
-      
-      // Monta a URL direta para o endpoint de download
       const downloadUrl = `${cleanBase}/certificados/download/${inscricao.certificado.codigo_unico}`;
-      
-      // Abre em nova aba
       window.open(downloadUrl, '_blank');
-    
     } else {
-      // Se caiu aqui, o Auto-Repair ainda está rodando ou falhou
       alert("O certificado está sendo gerado. Por favor, atualize a página (F5) e tente novamente.");
     }
   };
 
-  if (loading) return <p>A carregar inscrições...</p>;
+  if (loading) return <p className="loading-text" style={{textAlign: 'center', marginTop: '20px'}}>Carregando inscrições...</p>;
   if (error) return <p className="form-error">{error}</p>;
 
   return (
@@ -89,15 +78,21 @@ function InscricoesPage() {
       </div>
       
       {inscricoes.length === 0 ? (
-        <p className="empty-state">
-           Você ainda não se inscreveu em nenhum evento.
-           <br/>
-           <span style={{ fontSize: '0.9rem', marginTop: '8px', display: 'block' }}>
-             Acesse a aba "Eventos" para começar.
-           </span>
-        </p>
+        <div className="empty-state" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
+           <p>Você ainda não se inscreveu em nenhum evento.</p>
+           
+           {/* Botão de Ação para levar aos Eventos */}
+           <motion.button
+             className="btn-login"
+             style={{ width: 'auto', padding: '8px 24px', fontSize: '0.9rem' }}
+             onClick={() => navigate('/eventos')} // <--- 3. Redireciona para a aba certa
+             {...buttonHoverTap}
+           >
+             Ver eventos disponíveis <ArrowRight size={16} style={{marginLeft: 8}}/>
+           </motion.button>
+        </div>
       ) : (
-        <div className="lista-eventos" style={{ gridTemplateColumns: '1fr' }}> {/* Lista vertical */}
+        <div className="lista-eventos" style={{ gridTemplateColumns: '1fr' }}> 
           {inscricoes.map(inscricao => {
             const hasCheckin = inscricao.checkin_realizado === true;
             const status = inscricao.status ? inscricao.status.toLowerCase() : 'ativa';
@@ -108,7 +103,6 @@ function InscricoesPage() {
                 key={inscricao.id} 
                 className="card-inscricao"
                 variants={itemVariants}
-                // Adicionamos estilo condicional para cancelado via style ou classe extra se preferir
                 style={isCancelled ? { backgroundColor: '#fff5f5', borderColor: '#feb2b2' } : {}}
               >
                 {/* Coluna Esquerda: Info do Evento */}
@@ -141,7 +135,7 @@ function InscricoesPage() {
                     )}
                   </div>
                 </div>
-
+                
                 {/* Coluna Direita: Ações */}
                 <div className="card-actions" style={{ marginTop: 0, flexDirection: 'column', alignItems: 'flex-end', gap: '12px' }}>
                   
@@ -157,7 +151,7 @@ function InscricoesPage() {
                   )}
                   
                   {hasCheckin && (
-                     <motion.button 
+                      <motion.button 
                       className="btn-certificado"
                       onClick={() => handleAbrirCertificado(inscricao)}
                       {...buttonHoverTap}

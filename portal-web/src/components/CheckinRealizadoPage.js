@@ -1,12 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import { useNavigate } from 'react-router-dom'; // <--- 1. Import do Router
 import { CheckCircle, XCircle, Loader2, ArrowRight } from 'lucide-react';
 import api from '../api';
 import { buttonHoverTap } from '../App';
 
-function CheckinRealizadoPage({ setPagina }) {
+function CheckinRealizadoPage() { // <--- 2. Sem props
+  const navigate = useNavigate(); // <--- 3. Instância do Hook
+  
   const [status, setStatus] = useState('loading'); // loading, success, error
   const [message, setMessage] = useState('');
+  // eslint-disable-next-line no-unused-vars
   const [dados, setDados] = useState(null);
 
   useEffect(() => {
@@ -31,8 +35,9 @@ function CheckinRealizadoPage({ setPagina }) {
         
         // 3. Limpa pendências
         localStorage.removeItem('pending_checkin_token');
-        // Limpa a URL para não ficar feio
-        window.history.replaceState({}, document.title, "/");
+        
+        // Limpa a URL visualmente para não ficar o token exposto (Opcional, mas bom para UX)
+        window.history.replaceState({}, document.title, window.location.pathname);
 
         setStatus('success');
         setDados(response.data); // { message, inscricao_id, ... }
@@ -81,7 +86,7 @@ function CheckinRealizadoPage({ setPagina }) {
                 
                 <motion.button
                     className="btn-login"
-                    onClick={() => setPagina('inscricoes')}
+                    onClick={() => navigate('/inscricoes')} // <--- 4. Navegação Sucesso
                     {...buttonHoverTap}
                 >
                     Ver Minhas Inscrições <ArrowRight size={18} />
@@ -105,7 +110,7 @@ function CheckinRealizadoPage({ setPagina }) {
                 <motion.button
                     className="btn-logout"
                     style={{width: '100%', justifyContent: 'center'}}
-                    onClick={() => setPagina('eventos')}
+                    onClick={() => navigate('/eventos')} // <--- 5. Navegação Erro/Voltar
                     {...buttonHoverTap}
                 >
                     Voltar para o Início
