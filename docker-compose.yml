@@ -116,13 +116,11 @@
       container_name: servico_docs
       environment:
         SWAGGER_JSON: /swagger.yaml
-        BASE_URL: /docs  # Importante para funcionar atrás do Nginx
+        BASE_URL: /docs
       volumes:
         - ./docs/swagger.yaml:/swagger.yaml
       ports:
-        - "8081:8080" # Porta externa opcional, apenas para debug
-      networks:
-        - rede_eventos
+        - "8081:8080"
 
 volumes:
   postgres_data:
