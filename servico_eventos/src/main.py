@@ -18,7 +18,6 @@ app = FastAPI(
     title="Serviço de Eventos",
     version="2.1.0",
     description="API Modularizada para gestão de eventos e sync offline.",
-    root_path="/eventos",
 )
 
 app.add_middleware(RequestIDMiddleware)

@@ -20,6 +20,7 @@ import CheckinPage from './components/CheckinPage';
 import CheckinRealizadoPage from './components/CheckinRealizadoPage';
 import ChangePasswordScreen from './components/ChangePasswordScreen';
 import NotFoundPage from './components/NotFoundPage';
+import HomePage from './components/HomePage';
 
 // Animações
 
@@ -33,9 +34,9 @@ export const buttonHoverTap = {
 // ==========================================
 
 // Layout que engloba a navegação para usuários LOGADOS
-const ProtectedLayout = ({ user, logout, theme, toggleTheme }) => {
+const ProtectedLayout = ({ user, logout, theme, toggleTheme, onPasswordChanged }) => {
   const location = useLocation();
-  
+    
   if (!user) return <Navigate to="/login" replace />;
   if (user.must_change_password) {
       return <ChangePasswordScreen onPasswordChanged={onPasswordChanged} />;
@@ -76,10 +77,11 @@ const ProtectedLayout = ({ user, logout, theme, toggleTheme }) => {
 // Layout para páginas PÚBLICAS (Login, Registro, Validar)
 const PublicLayout = ({ theme, toggleTheme }) => {
     const location = useLocation();
+    const navigate = useNavigate();
     return (
         <div className={`App ${theme}`}>
           <header className="App-header">
-            <div className="logo-container">
+            <div className="logo-container" onClick={() => navigate('/')} style={{cursor: 'pointer'}}>
                 <img src={theme === 'light' ? logoLight : logoDark} alt="NexStage" className="App-logo" />
             </div>
              <nav className="main-nav">
@@ -168,11 +170,10 @@ function App() {
         <Routes>
             {/* --- ROTAS PÚBLICAS --- */}
             <Route element={<PublicLayout theme={theme} toggleTheme={toggleTheme} />}>
-                <Route path="/login" element={<LoginPage onLogin={handleLoginSuccess} />} />
-                <Route path="/register" element={<RegisterPage />} />
+                <Route path="/" element={<HomePage theme={theme}/>} />
+                <Route path="/login" element={<LoginPage onLogin={handleLoginSuccess} theme={theme} />} />
+                <Route path="/register" element={<RegisterPage theme={theme} />} />
                 <Route path="/validar" element={<ValidateCertificatePage />} />
-                {/* Redireciona raiz para login se não logado */}
-                <Route path="/" element={<Navigate to="/login" replace />} />
             </Route>
 
             {/* --- ROTAS PROTEGIDAS (REQUER LOGIN) --- */}
@@ -204,9 +205,9 @@ const AuthRedirectHandler = ({ user }) => {
         const params = new URLSearchParams(location.search);
         const tokenUrl = params.get('token');
         
-        if (tokenUrl) {
+        if (tokenUrl && location.pathname !== '/checkin-confirmar') {
              if (user) {
-                 navigate('/checkin-confirmar');
+                 navigate(`/checkin-confirmar?token=${tokenUrl}`);
              } else {
                  localStorage.setItem('pending_checkin_token', tokenUrl);
                  navigate('/login');
