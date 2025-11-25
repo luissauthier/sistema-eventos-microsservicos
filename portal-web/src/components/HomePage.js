@@ -11,7 +11,8 @@ import {
   Smartphone
 } from 'lucide-react';
 import { buttonHoverTap } from '../App'; // Importa animação padrão de botão
-import logoHero from '../nexstage_sem_fundo_escuro.svg'; // Ajuste se necessário para o logo correto
+import logoLight from '../nexstage_sem_fundo_escuro.svg'; // Ajuste se necessário para o logo correto
+import logoDark from '../nexstage_sem_fundo_branco.svg';
 
 // Variantes de Animação
 const fadeInUp = {
@@ -24,7 +25,7 @@ const staggerContainer = {
   visible: { opacity: 1, transition: { staggerChildren: 0.15 } }
 };
 
-function HomePage(theme) {
+function HomePage({ theme }) {
   const navigate = useNavigate();
   return (
     <div className="home-page">
@@ -59,7 +60,7 @@ function HomePage(theme) {
                 onClick={() => navigate('/register')}
                 {...buttonHoverTap}
               >
-                Começar Agora <ArrowRight size={18} />
+                Começar agora <ArrowRight size={18} />
               </motion.button>
               
               <motion.button 
@@ -67,7 +68,7 @@ function HomePage(theme) {
                 onClick={() => navigate('/login')}
                 {...buttonHoverTap}
               >
-                Acessar Plataforma
+                Acessar plataforma
               </motion.button>
             </div>
 
@@ -94,8 +95,12 @@ function HomePage(theme) {
             transition={{ duration: 0.8 }}
           >
             <div className="glow-bg"></div>
-            <img src={logoHero} alt="NexStage Platform" className="hero-logo-display" />
-          </motion.div>
+            <img 
+              src={theme === 'light' ? logoLight : logoDark} 
+              alt="NexStage" 
+              className="hero-logo-display" 
+            />
+           </motion.div>
         </div>
       </section>
 
@@ -115,32 +120,32 @@ function HomePage(theme) {
         >
           <FeatureCard 
             icon={WifiOff}
-            title="Check-in Offline Blindado"
+            title="Check-in offline blindado"
             desc="Nunca pare sua operação. Nosso App Local sincroniza automaticamente quando a rede retorna, sem perda de dados."
           />
           <FeatureCard 
             icon={Award}
-            title="Certificados Inteligentes"
+            title="Certificados inteligentes"
             desc="Geração e envio automático de certificados validados com QR Code único antifraude."
           />
           <FeatureCard 
             icon={BarChart3}
-            title="Monitoramento em Tempo Real"
+            title="Monitoramento em tempo real"
             desc="Dashboard ao vivo para acompanhar o fluxo de entrada e performance da equipe de atendimento."
           />
           <FeatureCard 
             icon={Smartphone}
-            title="App Local Robusto"
+            title="Plataforma Attendance robusta"
             desc="Interface otimizada para tablets e desktops, pensada para velocidade máxima no credenciamento."
           />
           <FeatureCard 
             icon={ShieldCheck}
-            title="Segurança de Dados"
+            title="Segurança de dados"
             desc="Arquitetura de microsserviços com autenticação JWT Stateless e logs auditáveis."
           />
           <FeatureCard 
             icon={CheckCircle2}
-            title="Validação Instantânea"
+            title="Validação instantânea"
             desc="Leitura de QR Codes ultra-rápida para validação de inscrições e controle de acesso."
           />
         </motion.div>
@@ -152,7 +157,7 @@ function HomePage(theme) {
           <h2>Pronto para elevar o nível do seu evento?</h2>
           <p>Junte-se aos organizadores que não dependem da sorte (ou do Wi-Fi).</p>
           <button className="btn-cta-final" onClick={() => navigate('/register')}>
-            Criar Conta Gratuita
+            Criar conta!
           </button>
         </div>
       </section>

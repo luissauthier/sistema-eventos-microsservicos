@@ -214,11 +214,11 @@ function EventosPage({ user }) {
                   {inscricoesIds.has(eventoSelecionado.id) ? (
                       <>
                         <Check size={20} /> 
-                        <span>Inscrição Confirmada</span>
+                        <span>Inscrição confirmada!</span>
                       </>
                   ) : (
                       <>
-                        <span>Confirmar Presença</span>
+                        <span>Inscreva-se</span>
                         <ArrowRight size={20} />
                       </>
                   )}
