@@ -111,6 +111,19 @@
     stdin_open: true
     tty: true
 
+servico_docs:
+    image: swaggerapi/swagger-ui
+    container_name: servico_docs
+    environment:
+      SWAGGER_JSON: /swagger.yaml
+      BASE_URL: /docs  # Importante para funcionar atrás do Nginx
+    volumes:
+      - ./docs/swagger.yaml:/swagger.yaml
+    ports:
+      - "8081:8080" # Porta externa opcional, apenas para debug
+    networks:
+      - rede_eventos
+
 volumes:
   postgres_data:
     driver: local
