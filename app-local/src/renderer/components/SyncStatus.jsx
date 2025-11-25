@@ -6,21 +6,32 @@ export function SyncStatus() {
   const [syncState, setSyncState] = useState('idle'); // idle, syncing, success, error
   const [msg, setMsg] = useState('');
 
+  // Alternar Modo
+  const toggleMode = async () => {
+    if (isOffline) {
+      // Tenta voltar online
+      console.log("[FRONT] Tentando voltar online...");
+      await window.api.online.setModeOnline();
+      setIsOffline(false);
+    } else {
+      // Força offline
+      console.log("[FRONT] Forçando modo offline...");
+      await window.api.online.setModeOffline();
+      setIsOffline(true);
+    }
+  };
+
   const handleSync = async () => {
-    console.log("[FRONT] Botão clicado! Chamando API...");
+    if (isOffline) return; // Não sincroniza se estiver offline
+    
     setSyncState('syncing');
     try {
-      // 1. Envia dados locais (Upload)
-      console.log("[FRONT] Invocando sincronizarUpload...");
-      const resUp = await window.api.sincronizarUpload();
-      console.log("[FRONT] Resposta Upload:", resUp);
-      
-      // 2. Baixa atualizações (Download)
-      const resDown = await window.api.sincronizarDownload();
+      const resUp = await window.api.online.sincronizarUpload();
+      const resDown = await window.api.online.sincronizarDownload();
 
       if (resUp.success && resDown.success) {
         setSyncState('success');
-        setMsg(`Enviados: ${resUp.usersSynced} users, ${resUp.checksSynced} presenças.`);
+        setMsg(`Sync OK: ${resUp.usersSynced} users envi.`);
       } else {
         setSyncState('error');
         setMsg(resUp.message || resDown.message);
@@ -29,28 +40,37 @@ export function SyncStatus() {
       setSyncState('error');
       setMsg('Erro de conexão.');
     }
-    
-    // Limpa mensagem após 5s
     setTimeout(() => setSyncState('idle'), 5000);
   };
 
   return (
     <div className="flex items-center gap-4 p-2 bg-slate-100 rounded-lg border">
+      
+      {/* Botão de Toggle Online/Offline */}
+      <Button 
+        variant={isOffline ? "destructive" : "secondary"} // Vermelho se offline, Cinza se online
+        size="sm"
+        onClick={toggleMode}
+        title={isOffline ? "Clique para reconectar" : "Clique para trabalhar offline"}
+      >
+        {isOffline ? <WifiOff className="mr-2 h-4 w-4" /> : <Wifi className="mr-2 h-4 w-4" />}
+        {isOffline ? "Modo Offline" : "Online"}
+      </Button>
+
       <div className="flex-1 text-sm text-slate-600">
         {syncState === 'syncing' && "Sincronizando..."}
-        {syncState === 'success' && <span className="text-green-600 flex items-center gap-1"><CheckCircle size={16}/> {msg}</span>}
-        {syncState === 'error' && <span className="text-red-600 flex items-center gap-1"><AlertCircle size={16}/> {msg}</span>}
-        {syncState === 'idle' && "Sistema pronto."}
+        {syncState === 'success' && <span className="text-green-600">{msg}</span>}
+        {syncState === 'error' && <span className="text-red-600">{msg}</span>}
       </div>
       
       <Button 
-        variant={syncState === 'error' ? "destructive" : "outline"}
+        variant="outline"
         size="sm"
         onClick={handleSync}
-        disabled={syncState === 'syncing'}
+        disabled={isOffline || syncState === 'syncing'}
       >
         <CloudUpload className="mr-2 h-4 w-4" />
-        Sincronizar Agora
+        Sync
       </Button>
     </div>
   );

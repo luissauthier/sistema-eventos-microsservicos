@@ -14,7 +14,6 @@ const { generateTempPassword } = require("../utils/password-gen");
 const logger = createLogger("ipc-offline");
 
 module.exports = function registerOfflineHandlers(db) {
-
   // 1. BUSCAR TUDO (Para preencher a tela inicial)
   ipcMain.handle("buscar-dados-locais", async () => {
     logger.info("local_data_query");
@@ -52,8 +51,9 @@ module.exports = function registerOfflineHandlers(db) {
 
       if (!user) {
         senhaTemp = generateTempPassword(10);
+        const derivedUsername = data.email.split('@')[0];
         user = await qUsers.createUserOffline({
-            username: data.email,
+            username: derivedUsername,
             nome: data.nome,
             email: data.email,
             senha_hash: senhaTemp,

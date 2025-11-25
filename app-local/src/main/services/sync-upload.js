@@ -93,12 +93,29 @@ async function uploadPendingData(token) {
     const pendingCancels = await qSubs.getPendingCancellations();
     for (const sub of pendingCancels) {
         try {
-            await api.cancelarInscricao(token, sub.server_id);
+            if (sub.server_id) {
+                await api.cancelarInscricao(token, sub.server_id);
+            }
             await qSubs.markSubscriptionSynced(sub.id_local, sub.server_id); 
             stats.cancels++;
+
         } catch (err) {
-            logger.error("upload_cancel_fail", { id: sub.id_local, err: err.message });
-            stats.errors++;
+            // Se o erro for 400 (Regra de Negócio: Já tem presença) ou 404 (Já não existe),
+            // Aceitamos que o servidor venceu e removemos a pendência local.
+            if (err.response && (err.response.status === 400 || err.response.status === 404)) {
+                 logger.warn("cancel_rejected_server_won", { 
+                     id: sub.id_local, 
+                     reason: "Server rejected cancellation (probably attended). Clearing pending status." 
+                 });
+                 
+                 // Força como 'synced' para parar de tentar enviar este cancelamento.
+                 // O próximo 'Download' vai sobrescrever o status local com o real do servidor (Ativa/Presente).
+                 await qSubs.markSubscriptionSynced(sub.id_local, sub.server_id);
+            } else {
+                 // Erros reais (Rede, 500, etc) continuam sendo logados como erro para tentar depois
+                 logger.error("upload_cancel_fail", { id: sub.id_local, err: err.message });
+                 stats.errors++;
+            }
         }
     }
 

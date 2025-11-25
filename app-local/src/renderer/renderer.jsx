@@ -210,8 +210,14 @@ function App() {
   const [checkinStep, setCheckinStep] = useState("search");
   const [checkinForm, setCheckinForm] = useState({ email: "", nome: "" });
   const [checkinResult, setCheckinResult] = useState(null);
+  const [searchError, setSearchError] = useState("");
 
   const [modalConfig, setModalConfig] = useState(null);
+
+  // --- Validador ---
+  const validateEmail = (email) => {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  };
 
   // --- Handlers de Dados ---
   const updateLocalData = async () => {
@@ -261,7 +267,7 @@ function App() {
           <div className="flex flex-col gap-2 text-sm">
             <div className="flex items-center gap-2 font-bold text-green-700">
               <CheckCircle2 size={18} />
-              <span>Sincronização Concluída com Sucesso!</span>
+              <span>Sincronização concluída com sucesso!</span>
             </div>
             
             <div className="grid grid-cols-2 gap-4 mt-1">
@@ -269,9 +275,9 @@ function App() {
               <div className="bg-white p-2 rounded border border-slate-100">
                 <p className="text-xs font-bold text-slate-400 uppercase mb-1">Enviado para Nuvem</p>
                 <ul className="space-y-0.5 text-slate-600">
-                  <li>• <b>{up.checkins}</b> Presenças/Check-ins</li>
-                  <li>• <b>{up.users}</b> Novos Usuários</li>
-                  <li>• <b>{up.subs}</b> Novas Inscrições</li>
+                  <li>• <b>{up.checkins}</b> Presenças/Check-in's</li>
+                  <li>• <b>{up.users}</b> Novos usuários</li>
+                  <li>• <b>{up.subs}</b> Novas inscrições</li>
                   {up.deletes > 0 && <li className="text-red-500">• <b>{up.deletes}</b> Cancelamentos</li>}
                 </ul>
               </div>
@@ -280,8 +286,9 @@ function App() {
               <div className="bg-white p-2 rounded border border-slate-100">
                 <p className="text-xs font-bold text-slate-400 uppercase mb-1">Recebido do Servidor</p>
                 <ul className="space-y-0.5 text-slate-600">
-                  <li>• <b>{down.events}</b> Eventos Atualizados</li>
-                  <li>• <b>{down.subs}</b> Inscrições Baixadas</li>
+                  <li>• <b>{down.events}</b> Eventos atualizados</li>
+                  <li>• <b>{down.users}</b> Usuários atualizados</li>
+                  <li>• <b>{down.subs}</b> Inscrições baixadas</li>
                 </ul>
               </div>
             </div>
@@ -296,7 +303,7 @@ function App() {
           <div className="flex items-start gap-2 text-red-700">
              <AlertCircle size={18} className="mt-0.5" />
              <div className="flex flex-col">
-               <span className="font-bold">Falha na Sincronização</span>
+               <span className="font-bold">Falha na sincronização</span>
                <span className="text-sm opacity-90">{erroMsg}</span>
                <span className="text-xs mt-1 opacity-70">Verifique sua conexão ou contate o suporte.</span>
              </div>
@@ -307,7 +314,7 @@ function App() {
     } catch (err) { 
       setMessage(
         <span className="flex items-center gap-2 text-red-600 font-bold">
-          <WifiOff size={18} /> Erro Crítico de Rede: {err.message}
+          <WifiOff size={18} /> Erro crítico de rede: {err.message}
         </span>
       );
     } finally { 
@@ -344,9 +351,17 @@ function App() {
   };
 
   const handleSearchParticipante = async () => {
+    setSearchError("");
+
     if (!checkinForm.email) return;
+
+    const emailLimpo = checkinForm.email.trim();
+    if (!validateEmail(emailLimpo)) {
+        setSearchError("Formato inválido. Use: usuario@dominio.com");
+        return;
+    }
     setCheckinResult(null); setLoading(true);
-    const emailBusca = checkinForm.email.trim().toLowerCase();
+    const emailBusca = emailLimpo.toLowerCase();
     
     // Busca segura (case insensitive)
     const userFound = localData.usuarios?.find(u => u.email && u.email.trim().toLowerCase() === emailBusca);
@@ -356,14 +371,14 @@ function App() {
 
     if (inscricaoFound) {
        setModalConfig({
-         title: "Confirmar Check-in",
+         title: "Confirmar check-in",
          message: `Participante ${inscricaoFound.nome_usuario} já inscrito. Realizar check-in?`,
          type: "info",
          action: async () => await executeCheckinRapido(inscricaoFound.nome_usuario, checkinForm.email)
        });
     } else if (userFound) {
        setModalConfig({
-         title: "Inscrever Participante",
+         title: "Inscrever participante",
          message: `Usuário ${userFound.nome} encontrado. Inscrever e fazer check-in?`,
          type: "info",
          action: async () => await executeCheckinRapido(userFound.nome, checkinForm.email)
@@ -399,6 +414,7 @@ function App() {
     setCheckinStep("search");
     setCheckinResult(null);
     setMessage("");
+    setSearchError("");
   };
 
   /* ============================================================
@@ -589,9 +605,12 @@ function App() {
                             <Input 
                               placeholder="cliente@email.com" 
                               value={checkinForm.email}
-                              onChange={e => setCheckinForm({...checkinForm, email: e.target.value})}
+                              onChange={e => {
+                                  setCheckinForm({...checkinForm, email: e.target.value});
+                                  if(searchError) setSearchError(""); // Limpa erro ao digitar
+                              }}
                               autoFocus
-                              className="text-lg h-11"
+                              className={`text-lg h-11 ${searchError ? 'border-red-500 ring-red-200' : ''}`}
                             />
                             <Button type="submit" disabled={loading || !checkinForm.email} className="h-11 w-12 px-0 bg-blue-600 hover:bg-blue-700">
                               <Search className="h-5 w-5" />
@@ -604,7 +623,7 @@ function App() {
                     {/* ETAPA 2: CADASTRO NOVO */}
                     {checkinStep === 'register' && (
                       <div className="space-y-4 animate-in slide-in-from-right-4">
-                        <Alert className="bg-amber-50 border-amber-200 text-amber-800 py-2">
+                        <Alert className="bg-amber-50 border-amber-200 text-amber-800 justify-center space-y-2 p-4">
                            <AlertCircle className="h-4 w-4" />
                            <AlertDescription className="text-xs font-medium">Não encontrado. Cadastre abaixo:</AlertDescription>
                         </Alert>

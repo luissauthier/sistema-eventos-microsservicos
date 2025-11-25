@@ -18,6 +18,7 @@ const VALID_CHANNELS = [
   "realizar-checkin-rapido",
   "log-message",
   "set-mode-offline",
+  "set-mode-online",
   "get-network-status"
 ];
 
