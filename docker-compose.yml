@@ -106,10 +106,11 @@
       - /app/node_modules
     environment:
       - WATCHPACK_POLLING=true
+      - HOST=0.0.0.0
+      - PORT=3000
+      - BROWSER=none
     depends_on:
       - gateway # O portal depende do gateway
-    stdin_open: true
-    tty: true
 
   servico_docs:
       image: swaggerapi/swagger-ui
