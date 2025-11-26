@@ -60,8 +60,15 @@ engine = create_engine(
     pool_size=10,                 # número padrão de conexões
     max_overflow=20,              # conexões extras se necessário
     pool_pre_ping=True,           # detecta conexões mortas
-    pool_recycle=1800,            # recicla conexões após 30 min
-    connect_args={"application_name": "servico_usuarios"}
+    pool_recycle=600,            # recicla conexões após 30 min
+    connect_args={
+        "application_name": "servico_usuarios",
+        # Configurações de Keepalive para evitar 'hang' na primeira requisição
+        "keepalives": 1,
+        "keepalives_idle": 30,    # Envia ping se ocioso por 30s
+        "keepalives_interval": 10, # Repete a cada 10s se não houver resposta
+        "keepalives_count": 5     # Desiste após 5 falhas (total ~80s, mas mantém a conexão viva na maioria dos casos)
+    }
 )
 
 

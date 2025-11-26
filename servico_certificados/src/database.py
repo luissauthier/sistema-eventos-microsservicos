@@ -60,8 +60,15 @@ engine = create_engine(
     pool_size=10,
     max_overflow=20,
     pool_pre_ping=True,           # Evita conexões mortas
-    pool_recycle=1800,            # Recicla após 30 minutos
-    connect_args={"application_name": "servico_certificados"}
+    pool_recycle=600,            # Recicla após 30 minutos
+    connect_args={
+        "application_name": "servico_certificados", # <--- Nome correto do serviço
+        # Configurações de Keepalive (Anti-Congelamento)
+        "keepalives": 1,
+        "keepalives_idle": 30,
+        "keepalives_interval": 10,
+        "keepalives_count": 5
+    }
 )
 
 

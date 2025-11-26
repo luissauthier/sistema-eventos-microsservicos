@@ -205,10 +205,20 @@ const AuthRedirectHandler = ({ user }) => {
         const params = new URLSearchParams(location.search);
         const tokenUrl = params.get('token');
         
-        if (tokenUrl && location.pathname !== '/checkin-confirmar') {
+        // Se existe um token na URL
+        if (tokenUrl) {
+             // Verifica se já estamos na página de destino para evitar Loop Infinito
+             const isCheckinPage = location.pathname.includes('/checkin-confirmar');
+
              if (user) {
-                 navigate(`/checkin-confirmar?token=${tokenUrl}`);
+                 // CENÁRIO A: Usuário Logado
+                 // Se ainda não estamos na página de confirmação, vai para lá levando o token na URL
+                 if (!isCheckinPage) {
+                     navigate(`/checkin-confirmar?token=${tokenUrl}`, { replace: true });
+                 }
              } else {
+                 // CENÁRIO B: Usuário Deslogado
+                 // Salva para depois e manda logar
                  localStorage.setItem('pending_checkin_token', tokenUrl);
                  navigate('/login');
              }

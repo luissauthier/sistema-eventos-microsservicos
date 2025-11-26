@@ -18,7 +18,7 @@ class EmailService {
     this.cardColor = "#1F2937";  // Fundo do cartão (Gray 800)
     this.textColor = "#F3F4F6";  // Texto claro (Gray 100)
     this.mutedColor = "#9CA3AF"; // Texto secundário (Gray 400)
-    this.logoUrl = "http://177.44.248.76/portal-web/public/logo-email.png"; 
+    this.logoUrl = "http://177.44.248.76/logo-email.png"; 
   }
 
   async verifyConnection() {

@@ -1,126 +1,149 @@
-import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import { useNavigate } from 'react-router-dom'; // <--- 1. Import do Router
-import { CheckCircle, XCircle, Loader2, ArrowRight } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { CheckCircle, XCircle, Loader2, ArrowLeft, AlertTriangle } from 'lucide-react';
 import api from '../api';
-import { buttonHoverTap } from '../App';
+import { motion } from 'framer-motion';
 
-function CheckinRealizadoPage() { // <--- 2. Sem props
-  const navigate = useNavigate(); // <--- 3. Instância do Hook
+const CheckinRealizadoPage = () => {
+  const [status, setStatus] = useState('processando');
+  const [mensagem, setMensagem] = useState('Validando sua presença...');
   
-  const [status, setStatus] = useState('loading'); // loading, success, error
-  const [message, setMessage] = useState('');
-  // eslint-disable-next-line no-unused-vars
-  const [dados, setDados] = useState(null);
+  // Ref para evitar dupla execução em React 18 Strict Mode
+  const processedToken = React.useRef(null);
+
+  const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
     const processarCheckin = async () => {
-      // 1. Tenta pegar o token da URL ou do LocalStorage (se veio do login)
-      const params = new URLSearchParams(window.location.search);
-      let token = params.get('token');
+      const params = new URLSearchParams(location.search);
+      const tokenUrl = params.get('token');
+      const tokenStorage = localStorage.getItem('pending_checkin_token');
       
-      if (!token) {
-         token = localStorage.getItem('pending_checkin_token');
-      }
+      // Prioridade: URL > Storage
+      const tokenFinal = tokenUrl || tokenStorage;
 
-      if (!token) {
-        setStatus('error');
-        setMessage('Nenhum token de check-in encontrado.');
+      // Se não tem token ou se já processamos ESTE token exato (evita loop)
+      if (!tokenFinal || processedToken.current === tokenFinal) {
+        if (!tokenFinal && status === 'processando') {
+            setStatus('erro');
+            setMensagem('Nenhum token encontrado. Leia o QR Code novamente.');
+        }
         return;
       }
 
-      try {
-        // 2. Chama a API
-        const response = await api.post(`/checkin-qr/${token}`);
-        
-        // 3. Limpa pendências
-        localStorage.removeItem('pending_checkin_token');
-        
-        // Limpa a URL visualmente para não ficar o token exposto (Opcional, mas bom para UX)
-        window.history.replaceState({}, document.title, window.location.pathname);
+      // Marca como processado para não repetir
+      processedToken.current = tokenFinal;
+      
+      // Reset visual para novo processamento
+      setStatus('processando');
+      setMensagem('Validando token...');
 
-        setStatus('success');
-        setDados(response.data); // { message, inscricao_id, ... }
+      try {
+        // Limpa storage para não atrapalhar futuros logins
+        localStorage.removeItem('pending_checkin_token');
+
+        const response = await api.post(`/checkin-qr/${tokenFinal}`);
+        const dados = response.data;
+
+        if (dados.message === "Já registrado") {
+            setStatus('warning');
+            setMensagem('Você já realizou o check-in neste evento.');
+        } else {
+            setStatus('sucesso');
+            setMensagem('Check-in confirmado com sucesso!');
+        }
         
-      } catch (err) {
-        console.error(err);
-        setStatus('error');
-        const msg = err.response?.data?.detail || err.response?.data?.message || "Token inválido ou expirado.";
-        setMessage(msg);
+        // Limpa a URL silenciosamente para ficar bonito (remove o ?token=...)
+        window.history.replaceState({}, '', '/checkin-confirmar');
+
+      } catch (error) {
+        console.error("Erro checkin:", error);
+        setStatus('erro');
+        
+        const msgBackend = error.response?.data?.detail || error.response?.data?.message;
+        if (msgBackend) {
+             if (msgBackend.includes("cancelada")) {
+                 setMensagem("Sua inscrição está CANCELADA. Contate a organização.");
+             } else if (msgBackend.includes("inválido") || msgBackend.includes("expirado")) {
+                 setMensagem("QR Code inválido ou expirado.");
+             } else {
+                 setMensagem(msgBackend);
+             }
+        } else {
+            setMensagem('Não foi possível validar o check-in.');
+        }
       }
     };
 
     processarCheckin();
-  }, []);
+  }, [location]); // Re-executa se a URL mudar (novo scan)
 
   return (
-    <div className="login-container" style={{ paddingTop: '40px' }}>
+    <div className="flex flex-col items-center justify-center min-h-[80vh] p-6 text-center animate-in fade-in zoom-in duration-300">
       <motion.div 
-        className="login-card"
-        initial={{ opacity: 0, scale: 0.9 }}
-        animate={{ opacity: 1, scale: 1 }}
-        style={{ maxWidth: '450px' }}
+        key={status} // Força animação ao trocar status
+        initial={{ scale: 0.9, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        className="bg-white p-8 rounded-2xl shadow-xl max-w-sm w-full border border-slate-100"
       >
-        
-        {/* ESTADO: CARREGANDO */}
-        {status === 'loading' && (
-            <div className="text-center py-8">
-                <Loader2 size={48} className="animate-spin mx-auto text-indigo-600 mb-4" />
-                <h2 style={{color: 'var(--primary)'}}>Validando Check-in...</h2>
-                <p style={{color: 'var(--text-secondary)'}}>Aguarde um momento.</p>
+        {status === 'processando' && (
+          <div className="py-8">
+            <div className="flex justify-center mb-6">
+              <Loader2 className="animate-spin text-indigo-600" size={64} />
             </div>
+            <h2 className="text-xl font-bold text-slate-700 mb-2">Processando...</h2>
+            <p className="text-slate-500 text-sm">{mensagem}</p>
+          </div>
         )}
 
-        {/* ESTADO: SUCESSO */}
-        {status === 'success' && (
-            <div className="text-center py-4">
-                <div className="mb-6 flex justify-center">
-                    <div className="bg-green-100 p-4 rounded-full">
-                        <CheckCircle size={64} className="text-green-600" />
-                    </div>
-                </div>
-                <h2 style={{color: 'var(--primary)', marginBottom: '8px'}}>Presença Confirmada!</h2>
-                <p style={{color: 'var(--text-secondary)', marginBottom: '32px'}}>
-                    Seu check-in foi registrado com sucesso. Aproveite o evento.
-                </p>
-                
-                <motion.button
-                    className="btn-login"
-                    onClick={() => navigate('/inscricoes')} // <--- 4. Navegação Sucesso
-                    {...buttonHoverTap}
-                >
-                    Ver Minhas Inscrições <ArrowRight size={18} />
-                </motion.button>
+        {status === 'sucesso' && (
+          <div className="py-4">
+            <div className="flex justify-center mb-6">
+              <div className="rounded-full bg-green-100 p-4">
+                <CheckCircle className="text-green-600" size={48} />
+              </div>
             </div>
+            <h2 className="text-2xl font-bold text-slate-800 mb-2">Tudo Certo!</h2>
+            <p className="text-slate-600 mb-8 font-medium">{mensagem}</p>
+            <button onClick={() => navigate('/eventos')} className="w-full bg-slate-900 text-white py-3.5 rounded-xl font-bold hover:bg-slate-800 transition-all shadow-lg">
+              Meus Eventos
+            </button>
+          </div>
         )}
 
-        {/* ESTADO: ERRO */}
-        {status === 'error' && (
-            <div className="text-center py-4">
-                <div className="mb-6 flex justify-center">
-                    <div className="bg-red-100 p-4 rounded-full">
-                        <XCircle size={64} className="text-red-600" />
-                    </div>
-                </div>
-                <h2 style={{color: 'var(--danger)', marginBottom: '8px'}}>Falha no Check-in</h2>
-                <p style={{color: 'var(--text-secondary)', marginBottom: '32px'}}>
-                    {message}
-                </p>
-                
-                <motion.button
-                    className="btn-logout"
-                    style={{width: '100%', justifyContent: 'center'}}
-                    onClick={() => navigate('/eventos')} // <--- 5. Navegação Erro/Voltar
-                    {...buttonHoverTap}
-                >
-                    Voltar para o Início
-                </motion.button>
+        {status === 'warning' && (
+          <div className="py-4">
+            <div className="flex justify-center mb-6">
+              <div className="rounded-full bg-amber-100 p-4">
+                <AlertTriangle className="text-amber-600" size={48} />
+              </div>
             </div>
+            <h2 className="text-xl font-bold text-slate-800 mb-2">Atenção</h2>
+            <p className="text-slate-600 mb-8 font-medium">{mensagem}</p>
+            <button onClick={() => navigate('/eventos')} className="w-full border border-slate-300 text-slate-700 py-3.5 rounded-xl font-bold hover:bg-slate-50 transition-all">
+              Voltar
+            </button>
+          </div>
         )}
 
+        {status === 'erro' && (
+          <div className="py-4">
+            <div className="flex justify-center mb-6">
+              <div className="rounded-full bg-red-100 p-4">
+                <XCircle className="text-red-600" size={48} />
+              </div>
+            </div>
+            <h2 className="text-xl font-bold text-slate-800 mb-2">Falha no Check-in</h2>
+            <p className="text-red-600/90 mb-8 text-sm font-medium bg-red-50 p-3 rounded-lg">{mensagem}</p>
+            <button onClick={() => navigate('/eventos')} className="w-full border border-slate-200 text-slate-700 py-3.5 rounded-xl font-bold hover:bg-slate-50 transition-all flex items-center justify-center gap-2">
+              <ArrowLeft size={18} /> Voltar
+            </button>
+          </div>
+        )}
       </motion.div>
     </div>
   );
-}
+};
 
 export default CheckinRealizadoPage;

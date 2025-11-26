@@ -62,8 +62,15 @@ engine = create_engine(
     pool_size=15,              # mais conexões para serviços que lidam com eventos
     max_overflow=25,
     pool_pre_ping=True,
-    pool_recycle=1800,         # recicla após 30m (evita timeouts do Postgres)
-    connect_args={"application_name": "servico_eventos"}
+    pool_recycle=600,         # recicla após 30m (evita timeouts do Postgres)
+    connect_args={
+        "application_name": "servico_eventos", # <--- Nome correto do serviço
+        # Configurações de Keepalive (Anti-Congelamento)
+        "keepalives": 1,
+        "keepalives_idle": 30,
+        "keepalives_interval": 10,
+        "keepalives_count": 5
+    }
 )
 
 

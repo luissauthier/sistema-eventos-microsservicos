@@ -110,6 +110,8 @@ async def consume_checkin_qr(
         db.add(insc)
         db.commit()
         db.refresh(insc)
+    if insc.status == models.InscricaoStatus.CANCELADA.value:
+        raise ServiceError("Sua inscrição está cancelada. Reative-a no portal antes de fazer check-in.", 400)
     
     # Verifica Presença
     if db.query(models.Presenca).filter_by(inscricao_id=insc.id).first():
