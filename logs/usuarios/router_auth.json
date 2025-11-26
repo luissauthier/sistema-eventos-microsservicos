@@ -1,0 +1,14 @@
+{"asctime": "2025-11-26 21:30:10", "levelname": "INFO", "name": "router_auth", "message": "login_success", "request_id": "f3070c67-8f5c-4480-a68f-e0cc171f9c37", "username": "lhsauthier", "roles": ["user"]}
+{"asctime": "2025-11-26 21:31:37", "levelname": "WARNING", "name": "router_auth", "message": "login_failed", "request_id": "910a538a-c3b1-4725-ac26-fc2595feda59", "username": "admin"}
+{"asctime": "2025-11-26 21:31:53", "levelname": "WARNING", "name": "router_auth", "message": "login_failed", "request_id": "505c09d8-b012-473f-abe8-7c036070fb32", "username": "admin"}
+{"asctime": "2025-11-26 21:32:25", "levelname": "INFO", "name": "router_auth", "message": "login_success", "request_id": "054b3b45-bcc6-45ed-857b-93bef52574f9", "username": "adminexstage", "roles": ["admin"]}
+{"asctime": "2025-11-26 22:30:21", "levelname": "INFO", "name": "router_auth", "message": "login_success", "request_id": "08f677cd-eee1-447d-a8c1-c11a79b71df3", "username": "pessoa1", "roles": ["user"]}
+{"asctime": "2025-11-26 22:31:37", "levelname": "INFO", "name": "router_auth", "message": "login_success", "request_id": "8d4466fc-4c76-4514-b561-edf1e703505e", "username": "pessoa2", "roles": ["user"]}
+{"asctime": "2025-11-26 22:32:31", "levelname": "INFO", "name": "router_auth", "message": "login_success", "request_id": "1da22475-c4a1-4020-9275-62fa000fb207", "username": "adminexstage", "roles": ["admin"]}
+{"asctime": "2025-11-26 22:36:37", "levelname": "INFO", "name": "router_auth", "message": "login_success", "request_id": "212ac158-5b89-4019-86a2-72cc7a412868", "username": "pessoa1", "roles": ["user"]}
+{"asctime": "2025-11-26 22:39:03", "levelname": "INFO", "name": "router_auth", "message": "login_success", "request_id": "cd96fd6b-2b1d-465b-8fa3-de5bf05ecc95", "username": "pessoa2", "roles": ["user"]}
+{"asctime": "2025-11-26 22:39:38", "levelname": "INFO", "name": "router_auth", "message": "login_success", "request_id": "f6f95cd5-66a9-4e2c-af89-0f48c35b3681", "username": "pessoa3", "roles": ["user"]}
+{"asctime": "2025-11-26 22:40:46", "levelname": "INFO", "name": "router_auth", "message": "login_success", "request_id": "1f8daeac-e5ac-4d65-b50d-f86b1548ba51", "username": "adminexstage", "roles": ["admin"]}
+{"asctime": "2025-11-26 22:41:33", "levelname": "INFO", "name": "router_auth", "message": "login_success", "request_id": "e27a07bf-4fd7-4f7c-b612-1585a991e205", "username": "pessoa3", "roles": ["user"]}
+{"asctime": "2025-11-26 23:09:12", "levelname": "INFO", "name": "router_auth", "message": "login_success", "request_id": "c1c2178f-a1d7-4556-b45d-7d8921434b8d", "username": "adminexstage", "roles": ["admin"]}
+{"asctime": "2025-11-26 23:16:01", "levelname": "INFO", "name": "router_auth", "message": "login_success", "request_id": "3dd5b99b-16d0-4031-9b94-b3695d1b0b04", "username": "pessoa3", "roles": ["user"]}

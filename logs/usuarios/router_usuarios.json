@@ -1,0 +1,3 @@
+{"asctime": "2025-11-26 22:30:06", "levelname": "INFO", "name": "router_usuarios", "message": "user_created", "request_id": "23eea2be-0970-4e47-951c-78c7cb6b9a54", "username": "pessoa1"}
+{"asctime": "2025-11-26 22:31:24", "levelname": "INFO", "name": "router_usuarios", "message": "user_created", "request_id": "0703dd53-fa60-40a0-b493-b0647430758e", "username": "pessoa2"}
+{"asctime": "2025-11-26 22:36:50", "levelname": "INFO", "name": "router_usuarios", "message": "user_created", "request_id": "62bc896f-a3a2-4dec-8989-2c6bfbcbe424", "username": "pessoa3"}

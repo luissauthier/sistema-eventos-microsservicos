@@ -43,6 +43,7 @@
     volumes:
       - ./servico_usuarios/src:/app
       - ./servico_comum:/app/servico_comum
+      - ./logs/usuarios:/app/logs
     expose:
       - "8000" # Porta interna (Uvicorn)
     depends_on:
@@ -60,6 +61,7 @@
     volumes:
       - ./servico_eventos/src:/app
       - ./servico_comum:/app/servico_comum
+      - ./logs/eventos:/app/logs
     expose:
       - "8000" # Porta interna
     depends_on:
@@ -76,6 +78,7 @@
     volumes:
       - ./servico_certificados/src:/app
       - ./servico_comum:/app/servico_comum
+      - ./logs/certificados:/app/logs
     expose:
       - "8000" # Porta interna
     depends_on:
@@ -90,6 +93,7 @@
     volumes:
       - ./servico_notificacoes:/app
       - /app/node_modules
+      - ./logs/notificacoes:/app/logs
     expose:
       - "8004" # Porta interna do Node
   

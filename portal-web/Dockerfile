@@ -14,6 +14,8 @@ RUN npm install
 # Copiar o resto do código da aplicação (isso será feito pelo docker-compose)
 # No nosso caso, usaremos 'volumes' para espelhar o código.
 
+COPY . .
+
 # Expor a porta padrão do create-react-app
 EXPOSE 3000
 

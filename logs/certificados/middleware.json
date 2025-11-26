@@ -1,0 +1,14 @@
+{"asctime": "2025-11-26 22:36:54", "levelname": "INFO", "name": "middleware", "message": "Incoming request: POST /interno/certificados/emitir_automatico", "request_id": "06f09d3a-e2c4-4904-bbad-c788011ef08a"}
+{"asctime": "2025-11-26 22:36:56", "levelname": "INFO", "name": "middleware", "message": "Incoming request: POST /interno/certificados/emitir_automatico", "request_id": "3b5204a5-062b-4d25-a760-dfa9ededda59"}
+{"asctime": "2025-11-26 22:37:24", "levelname": "INFO", "name": "middleware", "message": "Incoming request: POST /interno/certificados/emitir_automatico", "request_id": "aff263dc-8087-4556-ab56-e8dccc63c478"}
+{"asctime": "2025-11-26 22:37:24", "levelname": "INFO", "name": "middleware", "message": "Incoming request: POST /interno/certificados/emitir_automatico", "request_id": "83a8a602-b0e2-471e-a27d-8bf78cc76523"}
+{"asctime": "2025-11-26 22:37:33", "levelname": "INFO", "name": "middleware", "message": "Incoming request: GET /certificados/download/BBF9FB5684C75688", "request_id": "7d630d40-d2f0-4dba-bb6c-a92a1994a5eb"}
+{"asctime": "2025-11-26 22:37:55", "levelname": "INFO", "name": "middleware", "message": "Incoming request: GET /certificados/validar/BBF9FB5684C75688", "request_id": "eb23d5b4-d60e-4ca4-a41f-c7e0875c2090"}
+{"asctime": "2025-11-26 22:37:55", "levelname": "INFO", "name": "middleware", "message": "Incoming request: GET /certificados/validar/BBF9FB5684C75688", "request_id": "cda9eaf4-701e-471b-b924-130f558b1869"}
+{"asctime": "2025-11-26 22:38:25", "levelname": "INFO", "name": "middleware", "message": "Incoming request: GET /certificados/validar/BBF9FB5684C75688", "request_id": "09e12f9e-e351-4155-844b-669aed2ecfdd"}
+{"asctime": "2025-11-26 22:38:36", "levelname": "INFO", "name": "middleware", "message": "Incoming request: GET /certificados/validar/BBF9FB5684C75689", "request_id": "63fda37c-59df-4b31-a424-3f39f52845f3"}
+{"asctime": "2025-11-26 22:39:51", "levelname": "INFO", "name": "middleware", "message": "Incoming request: POST /interno/certificados/emitir_automatico", "request_id": "8845355a-f28a-4c14-a7f1-f220a6b951c1"}
+{"asctime": "2025-11-26 22:40:15", "levelname": "INFO", "name": "middleware", "message": "Incoming request: GET /certificados/download/3F1E2379C2EA0FAB", "request_id": "39e46a03-0cca-444e-aeed-ec014af7f655"}
+{"asctime": "2025-11-26 22:41:33", "levelname": "INFO", "name": "middleware", "message": "Incoming request: POST /interno/certificados/emitir_automatico", "request_id": "49fe0c5f-ddc5-46e8-a259-54b3d001184b"}
+{"asctime": "2025-11-26 22:41:46", "levelname": "INFO", "name": "middleware", "message": "Incoming request: GET /certificados/download/1F0122E8F77571C7", "request_id": "12e681c3-ccb1-4a20-8acd-dbea4258d176"}
+{"asctime": "2025-11-26 23:15:33", "levelname": "INFO", "name": "middleware", "message": "Incoming request: POST /interno/certificados/emitir_automatico", "request_id": "40eed12e-a7c0-46a6-b00e-708e06f5e256"}
